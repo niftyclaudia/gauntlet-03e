@@ -69,6 +69,8 @@ export interface AppState {
   selectedClipId: string | null;
   /** Current playhead position in seconds */
   currentPlayheadPosition: number;
+  /** Playback state (playing/paused) */
+  isPlaying: boolean;
   /** Export in progress flag */
   isExporting: boolean;
   /** Export progress percentage (0-100) */
@@ -77,5 +79,41 @@ export interface AppState {
   timelineZoom: number;
   /** Timeline horizontal scroll position in pixels */
   timelineScrollPosition: number;
+}
+
+/**
+ * Player state (component-level state for video player)
+ */
+export interface PlayerState {
+  /** Currently loaded clip from library */
+  currentVideo: VideoClip | null;
+  /** Currently playing timeline clip (if sequence mode) */
+  currentTimelineClip: TimelineClip | null;
+  /** Playback state */
+  isPlaying: boolean;
+  /** Current playback time in seconds, synced with video element */
+  currentTime: number;
+  /** Total duration of current clip/sequence in seconds */
+  duration: number;
+  /** Playback mode: 'library' | 'timeline' | 'sequence' */
+  playbackMode: 'library' | 'timeline' | 'sequence';
+  /** Loading state while video metadata loads */
+  isLoading: boolean;
+  /** Error message if video fails to load */
+  error: string | null;
+}
+
+/**
+ * Sequence item for sequence preview
+ */
+export interface SequenceItem {
+  /** Timeline clip */
+  clip: TimelineClip;
+  /** Library clip reference */
+  libraryClip: VideoClip;
+  /** Start time in sequence (cumulative) */
+  startTime: number;
+  /** End time in sequence (cumulative) */
+  endTime: number;
 }
 
