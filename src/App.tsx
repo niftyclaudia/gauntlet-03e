@@ -7,12 +7,15 @@
  * - Timeline (bottom, 30% height): Timeline editing interface
  */
 
-import React, { useState } from 'react';
+import React, { useState, useCallback } from 'react';
 import Library from './components/Library';
 import VideoPlayer from './components/VideoPlayer';
 import Timeline from './components/Timeline';
 import { VideoClip, TimelineClip } from './types/video';
 import { addClipToTimeline, reorderTimelineClip, removeClipFromTimeline } from './utils/timelineOperations';
+import { useAutoSave } from './hooks/useAutoSave';
+import { useSessionRestore } from './hooks/useSessionRestore';
+import { serializeProjectState } from './utils/projectStateUtils';
 
 const App: React.FC = () => {
   // Library state
@@ -25,6 +28,8 @@ const App: React.FC = () => {
   const [timelineScrollPosition, setTimelineScrollPosition] = useState<number>(0);
   const [currentPlayheadPosition, setCurrentPlayheadPosition] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
 
   /**
    * Handle completion of video import
@@ -103,9 +108,116 @@ const App: React.FC = () => {
     console.log(`[App] Cleared all clips from timeline`);
   };
 
+  /**
+   * Handle restoring state from autosave
+   * Called by useSessionRestore hook when user chooses to restore
+   */
+  const handleRestoreState = useCallback((restoredState: {
+    library: VideoClip[];
+    timeline: TimelineClip[];
+    selectedClipId: string | null;
+    currentPlayheadPosition: number;
+    timelineZoom: number;
+    timelineScrollPosition: number;
+  }) => {
+    console.log('[App] Restoring state from autosave:', {
+      clips: restoredState.library.length,
+      timeline: restoredState.timeline.length,
+      playheadPosition: restoredState.currentPlayheadPosition,
+      selectedClipId: restoredState.selectedClipId,
+    });
+    
+    // Restore library and timeline first
+    setLibrary(restoredState.library);
+    setTimeline(restoredState.timeline);
+    
+    // Restore other state
+    setTimelineZoom(restoredState.timelineZoom);
+    setTimelineScrollPosition(restoredState.timelineScrollPosition);
+    
+    // Restore selected clip (this triggers video loading)
+    setSelectedClipId(restoredState.selectedClipId);
+    
+    // Restore playhead position LAST (after clips are loaded)
+    // Use setTimeout to ensure clips have time to load first
+    setTimeout(() => {
+      console.log('[App] Setting restored playhead position:', restoredState.currentPlayheadPosition);
+      setCurrentPlayheadPosition(restoredState.currentPlayheadPosition);
+    }, 100);
+    
+    console.log('[App] State restored from autosave');
+  }, []);
+
+  /**
+   * Save project state before export starts
+   * Called by export handler (PR-8) before starting export
+   * Only saves if timeline has clips
+   * Errors are handled silently (logged only)
+   */
+  const handleBeforeExport = useCallback(async () => {
+    // Only save if timeline has clips
+    if (timeline.length === 0) {
+      return;
+    }
+
+    try {
+      const savedState = serializeProjectState(
+        library,
+        timeline,
+        selectedClipId,
+        currentPlayheadPosition,
+        timelineZoom,
+        timelineScrollPosition
+      );
+
+      await window.electron.saveProject(savedState);
+      console.log('[App] Project state saved before export');
+    } catch (error) {
+      // Log error but don't interrupt export
+      console.error('[App] Failed to save project state before export:', error);
+    }
+  }, [library, timeline, selectedClipId, currentPlayheadPosition, timelineZoom, timelineScrollPosition]);
+
+  /**
+   * Handle auto-save completion - update timestamp in status bar
+   */
+  const handleAutoSaveComplete = useCallback(() => {
+    const now = new Date();
+    const timeString = now.toLocaleTimeString('en-US', { 
+      hour12: false, 
+      hour: '2-digit', 
+      minute: '2-digit', 
+      second: '2-digit' 
+    });
+    setLastSavedTime(timeString);
+  }, []);
+
+  // Auto-save hook: saves state every 30 seconds when timeline has clips
+  useAutoSave({
+    library,
+    timeline,
+    selectedClipId,
+    currentPlayheadPosition,
+    timelineZoom,
+    timelineScrollPosition,
+    isExporting,
+    onSaveComplete: handleAutoSaveComplete,
+  });
+
+  // Session restore hook: checks for autosave file on mount and prompts to restore
+  useSessionRestore({
+    onRestore: handleRestoreState,
+  });
+
   return (
     <div className="app-container">
-      <div className="main-content">
+      {/* Auto-save status bar (top of app, below title bar) */}
+      {lastSavedTime && (
+        <div className="autosave-status-bar">
+          <span className="autosave-status-text">Auto saved: {lastSavedTime}</span>
+        </div>
+      )}
+      <div className="main-content" style={{ marginTop: lastSavedTime ? '22px' : '0' }}>
         <Library 
           library={library}
           onImportComplete={handleImportComplete}

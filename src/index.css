@@ -37,6 +37,40 @@ body {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  position: relative;
+}
+
+/* Auto-save status bar (top of app, below native title bar) */
+.autosave-status-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 22px;
+  background-color: #1a1a1a; /* Match app background */
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  z-index: 100;
+  pointer-events: none; /* Don't block clicks */
+  border-bottom: 1px solid #333333; /* Subtle separator */
+  animation: autosaveStatusFadeIn 0.2s ease-out;
+}
+
+@keyframes autosaveStatusFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.autosave-status-text {
+  color: #999999; /* Slightly muted, like CapCut */
+  font-weight: 400;
 }
 
 /* Top Section: Library + Preview */
@@ -44,6 +78,7 @@ body {
   display: flex;
   flex: 1; /* Takes remaining space after timeline */
   overflow: hidden;
+  /* margin-top will be added dynamically when status bar is visible */
 }
 
 /* Library Panel - Left, 20% width */

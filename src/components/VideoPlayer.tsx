@@ -336,6 +336,31 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [playerState.currentVideo, playerState.currentTimelineClip, onPlayingChange, sequence, currentSequenceIndex, sequenceTime]); // Removed isPlaying to prevent reload on play/pause toggle
 
   /**
+   * Track if we just restored from autosave (so we can seek to restored position)
+   */
+  const wasRestoredRef = useRef(false);
+  
+  /**
+   * Mark that we're restoring (called from App after restore)
+   * This is a workaround - we detect restore by checking if playhead jumps significantly
+   * on initial load (more than 10 seconds from 0 would indicate a restore)
+   */
+  useEffect(() => {
+    // If playhead is > 10 seconds and we haven't tracked a restore yet, likely a restore
+    if (currentPlayheadPosition > 10 && !wasRestoredRef.current && lastPlayheadPositionRef.current === 0) {
+      console.log('[VideoPlayer] Detected potential restore, playhead at:', currentPlayheadPosition);
+      wasRestoredRef.current = true;
+    }
+    // Reset restore flag after first significant change
+    if (wasRestoredRef.current && lastPlayheadPositionRef.current > 0) {
+      // After first sync, reset the flag (restore is done)
+      setTimeout(() => {
+        wasRestoredRef.current = false;
+      }, 1000);
+    }
+  }, [currentPlayheadPosition]);
+
+  /**
    * Sync video currentTime with external playhead changes (from timeline drag/click)
    * Handles both single clip and sequence preview modes
    */
@@ -347,6 +372,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const previousPlayhead = lastPlayheadPositionRef.current;
     const playheadDelta = Math.abs(currentPlayheadPosition - previousPlayhead);
     const isUserSeek = playheadDelta > 0.5;
+    
+    // If this is a restore (significant jump from 0), always seek
+    const isRestoreSeek = wasRestoredRef.current && previousPlayhead === 0 && currentPlayheadPosition > 0;
 
     // If it's a user seek (clicking on timeline) and we're playing, pause playback
     // Don't pause if this is from video playback (handled by handleTimeUpdate)
@@ -436,7 +464,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const diff = Math.abs(currentPlayheadPosition - videoTime);
 
     // If difference is > 0.1 seconds, it's likely an external seek
-    if (diff > 0.1) {
+    // OR if this is a restore, always seek (even if video just loaded)
+    if (diff > 0.1 || isRestoreSeek) {
       isExternalSeekRef.current = true;
 
       if (currentMode === 'timeline' && playerState.currentTimelineClip) {
@@ -444,6 +473,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const trimStart = playerState.currentTimelineClip.trimStart;
         const videoTime = trimStart + currentPlayheadPosition;
         const clampedTime = Math.max(trimStart, Math.min(videoTime, playerState.currentTimelineClip.trimEnd));
+        
+        console.log('[VideoPlayer] Syncing playhead to video:', {
+          playheadPosition: currentPlayheadPosition,
+          videoTime: clampedTime,
+          isRestore: isRestoreSeek,
+          previousPlayhead: previousPlayhead
+        });
+        
         videoRef.current.currentTime = clampedTime;
       }
 
@@ -478,12 +515,26 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         finalDuration = prev.currentTimelineClip.trimEnd - prev.currentTimelineClip.trimStart;
       }
 
+      // If this is a restore and we have a playhead position to restore to, seek to it
+      // This ensures video seeks to restored position after metadata loads
+      if (wasRestoredRef.current && currentPlayheadPosition > 0) {
+        console.log('[VideoPlayer] Metadata loaded during restore, seeking to:', currentPlayheadPosition);
+        // Seek will be handled by the useEffect watching currentPlayheadPosition
+        // But we can also do it here immediately since metadata is ready
+        if (prev.currentTimelineClip) {
+          const trimStart = prev.currentTimelineClip.trimStart;
+          const videoTime = trimStart + currentPlayheadPosition;
+          const clampedTime = Math.max(trimStart, Math.min(videoTime, prev.currentTimelineClip.trimEnd));
+          videoRef.current.currentTime = clampedTime;
+        }
+      }
+
       return {
         ...prev,
         duration: finalDuration,
         isLoading: false,
-        // Don't reset currentTime to 0 if in sequence mode
-        currentTime: isSequenceModeRef.current ? sequenceTime : 0,
+        // Don't reset currentTime to 0 if in sequence mode or if restoring
+        currentTime: isSequenceModeRef.current ? sequenceTime : (wasRestoredRef.current ? currentPlayheadPosition : 0),
       };
     });
   };
