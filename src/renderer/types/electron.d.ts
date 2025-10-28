@@ -5,7 +5,7 @@
  * in preload.ts. As IPC handlers are added in future PRs, update this interface.
  */
 
-import { VideoMetadata } from '../../types/video';
+import { VideoMetadata, SavedProjectState } from '../../types/video';
 
 export interface ElectronAPI {
   /**
@@ -51,6 +51,46 @@ export interface ElectronAPI {
    * @returns Absolute file path
    */
   getPathForFile: (file: File) => string;
+  
+  /**
+   * Saves project state to autosave.json file
+   * @param state - SavedProjectState object to save
+   * @returns Promise<void>
+   * @throws Error if file write fails
+   */
+  saveProject: (state: SavedProjectState) => Promise<void>;
+  
+  /**
+   * Loads project state from autosave.json file
+   * @returns Promise<SavedProjectState | null> - state if file exists and is valid, null otherwise
+   */
+  loadProject: () => Promise<SavedProjectState | null>;
+  
+  /**
+   * Deletes autosave.json file
+   * @returns Promise<void>
+   */
+  deleteAutosave: () => Promise<void>;
+  
+  /**
+   * Gets autosave file age in milliseconds
+   * @returns Promise<number | null> - age in milliseconds, or null if file doesn't exist
+   */
+  getAutosaveAge: () => Promise<number | null>;
+  
+  /**
+   * Shows restore dialog asking user to restore session
+   * @param timestamp - ISO timestamp string to display
+   * @returns Promise<'restore' | 'fresh' | null> - user choice or null if cancelled
+   */
+  showRestoreDialog: (timestamp: string) => Promise<'restore' | 'fresh' | null>;
+  
+  /**
+   * Validates that a file path exists and is readable
+   * @param filePath - Absolute path to file
+   * @returns Promise<boolean> - true if file exists and is readable
+   */
+  validateFileExists: (filePath: string) => Promise<boolean>;
 }
 
 declare global {
