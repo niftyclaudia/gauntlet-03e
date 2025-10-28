@@ -60,11 +60,22 @@ export function useFileImport(): UseFileImportResult {
         );
 
         try {
-          // Validate file extension
-          const validation = validateVideoFile(filePath);
+          // Get file size for validation
+          let fileSize: number = 0;
+          try {
+            fileSize = await window.electron.getFileSize(filePath);
+          } catch (sizeError) {
+            // If getting file size fails, skip size validation but log warning
+            console.warn(`[Import] Could not get file size for ${filename}, skipping size check:`, sizeError);
+          }
+          
+          // Validate file extension and size (if we got file size)
+          const validation = validateVideoFile(filePath, fileSize > 0 ? fileSize : undefined);
           
           if (!validation.valid) {
-            setError(validation.error || 'Invalid file');
+            // Show user-friendly error message
+            const userErrorMessage = validation.error || 'Invalid file format. Please use MP4 or MOV files.';
+            setError(userErrorMessage);
             console.error(`[Import] Validation failed for ${filename}:`, validation.error);
             continue; // Skip this file, continue with others
           }
@@ -99,10 +110,32 @@ export function useFileImport(): UseFileImportResult {
 
           importedClips.push(clip);
           console.log(`[Import] Successfully imported ${filename}`, clip);
-        } catch (fileError) {
-          const errorMsg = `Failed to import ${filename}: ${fileError}`;
-          setError(errorMsg);
-          console.error(`[Import] ${errorMsg}`, fileError);
+        } catch (fileError: any) {
+          // Extract user-friendly error message
+          let userErrorMessage = `Failed to import ${filename}`;
+          
+          // Check for specific error types and provide friendly messages
+          if (fileError?.message) {
+            const errorMsg = fileError.message.toLowerCase();
+            if (errorMsg.includes('file not found') || errorMsg.includes('not readable')) {
+              userErrorMessage = `Cannot read file: ${filename}. Please check the file exists and you have permission to access it.`;
+            } else if (errorMsg.includes('metadata')) {
+              userErrorMessage = `Could not read video information from ${filename}. The file may be corrupted or in an unsupported format.`;
+            } else if (errorMsg.includes('thumbnail')) {
+              userErrorMessage = `Could not create thumbnail for ${filename}. The file may be corrupted.`;
+            } else if (errorMsg.includes('too large') || errorMsg.includes('4gb')) {
+              userErrorMessage = `File too large: ${filename}. Maximum file size is 4GB.`;
+            } else if (errorMsg.includes('handler')) {
+              // This is a technical error - probably app needs restart
+              userErrorMessage = `Import temporarily unavailable. Please restart the app and try again.`;
+            } else {
+              // Generic error - still better than raw error
+              userErrorMessage = `Could not import ${filename}. Please check the file is a valid MP4 or MOV video.`;
+            }
+          }
+          
+          setError(userErrorMessage);
+          console.error(`[Import] ${userErrorMessage}`, fileError);
           // Continue with remaining files
         }
       }

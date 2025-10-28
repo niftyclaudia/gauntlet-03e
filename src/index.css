@@ -262,9 +262,323 @@ body {
   min-height: 150px;
   background-color: #1a1a1a;
   border-top: 1px solid #333333;
-  padding: 16px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Timeline Header */
+.timeline-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  border-bottom: 1px solid #333333;
+  background-color: #2a2a2a;
+  flex-shrink: 0;
+}
+
+.timeline-header-left {
+  display: flex;
+  align-items: center;
+}
+
+.timeline-header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.timeline-total-duration {
+  font-size: 13px;
+  font-weight: 500;
+  color: #ffffff;
+}
+
+.timeline-clear-all-button {
+  background-color: #cc0000;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  padding: 6px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.timeline-clear-all-button:hover:not(:disabled) {
+  background-color: #aa0000;
+}
+
+.timeline-clear-all-button:disabled {
+  background-color: #333333;
+  color: #666666;
+  cursor: not-allowed;
+}
+
+/* Time Ruler */
+.time-ruler {
+  display: flex;
+  align-items: center;
+  font-size: 12px;
+  color: #ffffff;
+}
+
+.time-ruler-current-time {
+  font-family: 'Courier New', monospace;
+  font-weight: 500;
+}
+
+/* Timeline Container */
+.timeline-container {
+  flex: 1;
   overflow-x: auto;
   overflow-y: hidden;
+  background-color: #2a2a2a;
+  position: relative;
+  cursor: default;
+}
+
+.timeline-container.timeline-drag-over {
+  border: 2px dashed #0066cc;
+  background-color: rgba(0, 102, 204, 0.1);
+}
+
+/* Timeline Clips Container */
+.timeline-clips-container {
+  position: relative;
+  /* min-height set inline to scale with zoom */
+  width: 100%;
+}
+
+/* Timeline Empty State */
+.timeline-empty-state {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+}
+
+.timeline-empty-state p {
+  color: #999999;
+  font-size: 14px;
+}
+
+/* Timeline Clip Card */
+.timeline-clip-card {
+  background-color: #1a1a1a;
+  border-radius: 4px;
+  padding: 4px;
+  cursor: move;
+  transition: border-color 0.2s ease, transform 0.1s ease;
+  border: 2px solid transparent;
+  user-select: none;
+}
+
+.timeline-clip-card:hover {
+  border-color: #666666;
+}
+
+.timeline-clip-card.timeline-clip-selected {
+  border-color: #0066cc;
+  box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.3);
+}
+
+.timeline-clip-thumbnail-container {
+  position: relative;
+  width: 100%;
+  /* Height set inline to scale with zoom - all clips have same height */
+  border-radius: 2px;
+  overflow: hidden;
+  background-color: #1a1a1a;
+}
+
+.timeline-clip-thumbnail {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.timeline-clip-thumbnail-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #666666;
+  font-size: 11px;
+}
+
+.timeline-clip-duration-overlay {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  background-color: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 500;
+  padding: 2px 4px;
+  border-radius: 2px;
+}
+
+/* Trim Handles (visual only, non-functional for PR-3) */
+.timeline-clip-trim-handle {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background-color: rgba(0, 102, 204, 0.5);
+  cursor: ew-resize;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.timeline-clip-card:hover .timeline-clip-trim-handle {
+  opacity: 0.5;
+}
+
+.timeline-clip-trim-handle-left {
+  left: 0;
+  border-top-left-radius: 2px;
+  border-bottom-left-radius: 2px;
+}
+
+.timeline-clip-trim-handle-right {
+  right: 0;
+  border-top-right-radius: 2px;
+  border-bottom-right-radius: 2px;
+}
+
+.timeline-clip-filename {
+  margin-top: 4px;
+  font-size: 11px;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Delete Button */
+.timeline-clip-delete-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  background-color: rgba(220, 53, 69, 0.9);
+  color: #ffffff;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease, transform 0.1s ease;
+  z-index: 10;
+  padding: 0;
+  user-select: none;
+}
+
+.timeline-clip-card:hover .timeline-clip-delete-button,
+.timeline-clip-card.timeline-clip-selected .timeline-clip-delete-button {
+  opacity: 1;
+}
+
+.timeline-clip-delete-button:hover {
+  background-color: rgba(220, 53, 69, 1);
+  transform: scale(1.1);
+}
+
+.timeline-clip-delete-button:active {
+  transform: scale(0.95);
+}
+
+/* Drop Indicator */
+.timeline-drop-indicator {
+  position: absolute;
+  left: -1px;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: #0066cc;
+  z-index: 5;
+}
+
+/* Playhead */
+.playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background-color: #ff0000;
+  pointer-events: none;
+  z-index: 10;
+}
+
+/* Timeline Footer */
+.timeline-footer {
+  padding: 8px 16px;
+  border-top: 1px solid #333333;
+  background-color: #2a2a2a;
+  flex-shrink: 0;
+}
+
+/* Timeline Zoom Controls */
+.timeline-zoom-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.timeline-zoom-slider {
+  width: 200px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: #333333;
+  outline: none;
+  cursor: pointer;
+}
+
+.timeline-zoom-slider::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #0066cc;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.timeline-zoom-slider::-webkit-slider-thumb:hover {
+  background-color: #0052a3;
+}
+
+.timeline-zoom-slider::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background-color: #0066cc;
+  cursor: pointer;
+  border: none;
+  transition: background-color 0.2s ease;
+}
+
+.timeline-zoom-slider::-moz-range-thumb:hover {
+  background-color: #0052a3;
+}
+
+.timeline-zoom-indicator {
+  font-size: 12px;
+  font-weight: 500;
+  color: #ffffff;
+  min-width: 50px;
 }
 
 /* Empty State Styling */

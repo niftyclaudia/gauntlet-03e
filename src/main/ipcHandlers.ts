@@ -6,7 +6,7 @@
 
 import { ipcMain, dialog } from 'electron';
 import { extractMetadata, generateThumbnail } from './ffmpeg';
-import { validateFileExists, ensureThumbnailDirectory } from './fileSystem';
+import { validateFileExists, ensureThumbnailDirectory, getFileSize } from './fileSystem';
 import { VideoMetadata } from '../types/video';
 
 /**
@@ -48,6 +48,27 @@ export function registerIpcHandlers(): void {
     } catch (error) {
       console.error('[IPC] File selection error:', error);
       throw new Error(`Failed to open file picker: ${error}`);
+    }
+  });
+
+  /**
+   * Handler: file:getFileSize
+   * Gets file size in bytes
+   * Params: filePath (string)
+   * Returns: File size in bytes (0 if error)
+   */
+  ipcMain.handle('file:getFileSize', async (_event, filePath: string): Promise<number> => {
+    try {
+      // Validate file exists
+      if (!validateFileExists(filePath)) {
+        throw new Error(`File not found or not readable: ${filePath}`);
+      }
+
+      const size = getFileSize(filePath);
+      return size;
+    } catch (error) {
+      console.error('[IPC] Failed to get file size:', error);
+      return 0;
     }
   });
 

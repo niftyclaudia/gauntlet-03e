@@ -15,6 +15,13 @@ export interface ElectronAPI {
   selectFiles: () => Promise<string[]>;
   
   /**
+   * Gets file size in bytes
+   * @param filePath - Absolute path to file
+   * @returns File size in bytes (0 if error)
+   */
+  getFileSize: (filePath: string) => Promise<number>;
+  
+  /**
    * Extracts video metadata using FFmpeg
    * @param filePath - Absolute path to video file
    * @returns Video metadata (duration, resolution, framerate, codec)

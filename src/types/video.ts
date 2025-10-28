@@ -42,13 +42,29 @@ export interface VideoClip {
 }
 
 /**
+ * Clip on the timeline
+ */
+export interface TimelineClip {
+  /** Unique identifier (UUID v4) */
+  id: string;
+  /** Reference to library clip ID */
+  libraryClipId: string;
+  /** Trim start time in seconds (default: 0) */
+  trimStart: number;
+  /** Trim end time in seconds (default: clip duration) */
+  trimEnd: number;
+  /** Sequence position (0, 1, 2, ...) */
+  order: number;
+}
+
+/**
  * Application state structure
  */
 export interface AppState {
   /** Array of imported video clips */
   library: VideoClip[];
-  /** Timeline clips (for future PRs) */
-  timeline: any[]; // Will be typed in PR-3
+  /** Timeline clips */
+  timeline: TimelineClip[];
   /** Currently selected clip ID */
   selectedClipId: string | null;
   /** Current playhead position in seconds */
@@ -57,9 +73,9 @@ export interface AppState {
   isExporting: boolean;
   /** Export progress percentage (0-100) */
   exportProgress: number;
-  /** Timeline zoom level (1.0 = normal) */
+  /** Timeline zoom level (1.0 = 100%, 10.0 = 1000%) */
   timelineZoom: number;
-  /** Timeline horizontal scroll position */
+  /** Timeline horizontal scroll position in pixels */
   timelineScrollPosition: number;
 }
 
