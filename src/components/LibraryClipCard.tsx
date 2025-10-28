@@ -14,9 +14,11 @@ interface LibraryClipCardProps {
   clip: VideoClip;
   /** Callback when clip is selected */
   onSelect?: (clip: VideoClip) => void;
+  /** Whether this clip is currently selected */
+  isSelected?: boolean;
 }
 
-const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect }) => {
+const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect, isSelected = false }) => {
   const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string>('');
 
   // Load thumbnail as data URL on mount
@@ -39,14 +41,14 @@ const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect }) => 
     }
   };
 
-  const handleDragStart = (e: React.DragEvent) => {
+  const handleDragStart = (e: React.DragEvent<HTMLDivElement>) => {
     e.dataTransfer.effectAllowed = 'copy';
     e.dataTransfer.setData('application/library-clip-id', clip.id);
     // Set opacity for dragging feedback
     e.currentTarget.style.opacity = '0.5';
   };
 
-  const handleDragEnd = (e: React.DragEvent) => {
+  const handleDragEnd = (e: React.DragEvent<HTMLDivElement>) => {
     // Restore opacity
     e.currentTarget.style.opacity = '1';
   };
@@ -61,7 +63,7 @@ const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect }) => 
 
   return (
     <div 
-      className="library-clip-card"
+      className={`library-clip-card ${isSelected ? 'selected' : ''}`}
       onClick={handleClick}
       draggable
       onDragStart={handleDragStart}

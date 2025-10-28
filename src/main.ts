@@ -27,6 +27,9 @@ const createWindow = () => {
     webPreferences: {
       contextIsolation: true, // Required for security (prd-v1.md)
       preload: path.join(__dirname, 'preload.js'),
+      webSecurity: false, // Allow loading local video files via file:// protocol
+      // Note: This is acceptable for MVP as we only load user-selected local files
+      // Consider implementing custom protocol handler for production
     },
   });
 

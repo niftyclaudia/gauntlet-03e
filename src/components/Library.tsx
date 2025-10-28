@@ -17,9 +17,11 @@ interface LibraryProps {
   onImportComplete: (clips: VideoClip[]) => void;
   /** Callback when clip is selected */
   onSelectClip?: (clip: VideoClip) => void;
+  /** Currently selected clip ID (for highlighting) */
+  selectedClipId?: string | null;
 }
 
-const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectClip }) => {
+const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectClip, selectedClipId }) => {
   const [isDragging, setIsDragging] = useState(false);
   const { isImporting, importProgress, handleFileImport, error, warning, clearMessages } = useFileImport();
 
@@ -151,6 +153,7 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
                 key={clip.id}
                 clip={clip}
                 onSelect={onSelectClip}
+                isSelected={selectedClipId === clip.id}
               />
             ))}
           </div>

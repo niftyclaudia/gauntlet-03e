@@ -24,6 +24,7 @@ const App: React.FC = () => {
   const [timelineZoom, setTimelineZoom] = useState<number>(1.0);
   const [timelineScrollPosition, setTimelineScrollPosition] = useState<number>(0);
   const [currentPlayheadPosition, setCurrentPlayheadPosition] = useState<number>(0);
+  const [isPlaying, setIsPlaying] = useState<boolean>(false);
 
   /**
    * Handle completion of video import
@@ -109,8 +110,17 @@ const App: React.FC = () => {
           library={library}
           onImportComplete={handleImportComplete}
           onSelectClip={handleSelectClip}
+          selectedClipId={selectedClipId}
         />
-        <VideoPlayer />
+        <VideoPlayer
+          selectedClipId={selectedClipId}
+          library={library}
+          timeline={timeline}
+          currentPlayheadPosition={currentPlayheadPosition}
+          onPlayheadChange={setCurrentPlayheadPosition}
+          isPlaying={isPlaying}
+          onPlayingChange={setIsPlaying}
+        />
       </div>
       <Timeline
         timeline={timeline}
@@ -126,6 +136,7 @@ const App: React.FC = () => {
         onClearAll={handleClearAll}
         onZoomChange={setTimelineZoom}
         onScrollChange={setTimelineScrollPosition}
+        onPlayheadChange={setCurrentPlayheadPosition}
       />
     </div>
   );
