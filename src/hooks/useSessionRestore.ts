@@ -23,6 +23,10 @@ interface UseSessionRestoreParams {
   onRestore: (state: RestoredState) => void;
 }
 
+// Module-level flag to prevent multiple restore attempts across component remounts
+// This handles React.StrictMode double-invocation in development
+let globalRestoreChecked = false;
+
 /**
  * Session restore hook that checks for autosave file on mount
  * Shows restore dialog if file exists and is recent (< 24 hours)
@@ -30,15 +34,17 @@ interface UseSessionRestoreParams {
  * All errors are handled gracefully (start fresh if restore fails)
  */
 export function useSessionRestore({ onRestore }: UseSessionRestoreParams): void {
-  // Use ref to prevent multiple restore attempts
+  // Use ref to prevent multiple restore attempts in same render cycle
   const hasCheckedRef = useRef(false);
 
   useEffect(() => {
-    // Only run once on mount
-    if (hasCheckedRef.current) {
+    // Only run once per app lifecycle (handles StrictMode double-invocation)
+    if (hasCheckedRef.current || globalRestoreChecked) {
       return;
     }
+    
     hasCheckedRef.current = true;
+    globalRestoreChecked = true;
 
     // Check for autosave file and restore if needed
     const checkAndRestore = async () => {
