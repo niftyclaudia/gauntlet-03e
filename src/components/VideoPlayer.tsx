@@ -246,7 +246,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 if (isSequenceModeRef.current && isPlaying && videoRef.current) {
                   console.log('[VideoPlayer] Sequence clip ready, starting playback');
                   videoRef.current.play().catch(err => {
-                    console.error('[VideoPlayer] Sequence play error:', err);
+                    // AbortError is expected when video is loading, filter it out
+                    if (err.name !== 'AbortError') {
+                      console.error('[VideoPlayer] Sequence play error:', err);
+                    }
                   });
                   // Mark as not loading once playing
                   setPlayerState(prev => ({ ...prev, isLoading: false }));
@@ -258,7 +261,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               // Also try playing immediately if metadata is already loaded
               if (videoRef.current.readyState >= 2 && isSequenceModeRef.current && isPlaying) {
                 videoRef.current.play().catch(err => {
-                  console.error('[VideoPlayer] Sequence play error (immediate):', err);
+                  // AbortError is expected when video is loading, filter it out
+                  if (err.name !== 'AbortError') {
+                    console.error('[VideoPlayer] Sequence play error (immediate):', err);
+                  }
                 });
                 setPlayerState(prev => ({ ...prev, isLoading: false }));
               }
@@ -271,7 +277,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               // Ensure video is playing if it should be
               if (isSequenceModeRef.current && isPlaying && videoRef.current.paused) {
                 videoRef.current.play().catch(err => {
-                  console.error('[VideoPlayer] Sequence play error (resume):', err);
+                  // AbortError is expected when video is loading, filter it out
+                  if (err.name !== 'AbortError') {
+                    console.error('[VideoPlayer] Sequence play error (resume):', err);
+                  }
                 });
               }
               
@@ -540,6 +549,42 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   /**
+   * Sync playhead position with video's actual currentTime
+   * Called when pausing to ensure playhead matches where video actually stopped
+   * Uses refs to get latest state values
+   */
+  const syncPlayheadOnPause = () => {
+    if (!videoRef.current) return;
+
+    const videoCurrentTime = videoRef.current.currentTime || 0;
+    const currentSequence = sequenceRef.current;
+    const currentSeqIndex = currentSequenceIndexRef.current;
+    const currentPlayerState = playerStateRef.current;
+
+    // For sequence mode, convert video time to sequence time
+    if (isSequenceModeRef.current && currentSequence.length > 0 && currentSeqIndex >= 0) {
+      const currentSequenceItem = currentSequence[currentSeqIndex];
+      if (currentSequenceItem) {
+        const timeWithinClip = videoCurrentTime - currentSequenceItem.clip.trimStart;
+        const newSequenceTime = currentSequenceItem.startTime + timeWithinClip;
+        setSequenceTime(newSequenceTime);
+        onPlayheadChange(newSequenceTime);
+        return;
+      }
+    }
+
+    // For single timeline clip, convert to timeline time
+    if (currentPlayerState.currentTimelineClip && !isSequenceModeRef.current) {
+      const clip = currentPlayerState.currentTimelineClip;
+      const timelineTime = videoCurrentTime - clip.trimStart;
+      onPlayheadChange(Math.max(0, timelineTime));
+      return;
+    }
+
+    // For library clips, don't update timeline playhead (they're independent)
+  };
+
+  /**
    * Handle video time update (during playback)
    */
   const handleTimeUpdate = () => {
@@ -586,16 +631,19 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             // Playback will continue automatically (handled in canplay event)
             return; // Skip rest of time update handling
           } else {
-            // Sequence ended
-            console.log('[VideoPlayer] Sequence ended');
+            // Sequence ended - sync playhead to final position before pausing
+            const finalSequenceTime = currentSequenceItem.endTime;
+            console.log('[VideoPlayer] Sequence ended at:', finalSequenceTime);
             if (videoRef.current) {
               videoRef.current.pause();
             }
+            // Sync playhead to end of sequence
+            setSequenceTime(finalSequenceTime);
+            onPlayheadChange(finalSequenceTime);
             onPlayingChange(false);
             setPlayerState(prev => ({ ...prev, isPlaying: false }));
             isSequenceModeRef.current = false;
             setCurrentSequenceIndex(-1);
-            setSequenceTime(0);
             return; // Skip rest of time update handling
           }
         }
@@ -634,6 +682,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       if (videoCurrentTime >= clip.trimEnd) {
         videoRef.current.pause();
         videoRef.current.currentTime = clip.trimEnd;
+        // Sync playhead to end of clip
+        const timelineTime = clip.trimEnd - clip.trimStart;
+        onPlayheadChange(timelineTime);
         onPlayingChange(false);
         setPlayerState(prev => ({ ...prev, isPlaying: false }));
       }
@@ -729,15 +780,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     if (isPlaying) {
       videoRef.current.pause();
+      // Sync playhead position to match where video actually stopped
+      syncPlayheadOnPause();
       onPlayingChange(false);
       setPlayerState(prev => ({ ...prev, isPlaying: false }));
     } else {
       videoRef.current.play().catch(err => {
-        console.error('[VideoPlayer] Play error:', err);
-        setPlayerState(prev => ({
-          ...prev,
-          error: 'Failed to play video',
-        }));
+        // AbortError is expected when video is loading, filter it out
+        if (err.name !== 'AbortError') {
+          console.error('[VideoPlayer] Play error:', err);
+          setPlayerState(prev => ({
+            ...prev,
+            error: 'Failed to play video',
+          }));
+        }
       });
       onPlayingChange(true);
       setPlayerState(prev => ({ ...prev, isPlaying: true }));
@@ -843,8 +899,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             return;
           }
           console.log('[VideoPlayer] Pausing via spacebar at playhead:', currentPlayheadPositionRef.current);
-          // Just pause, don't exit sequence mode - preserve playhead position
+          // Pause first, then sync playhead to actual video position
           videoRef.current.pause();
+          // Sync playhead position to match where video actually stopped
+          syncPlayheadOnPause();
           onPlayingChange(false);
           setPlayerState(prev => ({ ...prev, isPlaying: false }));
           // Keep sequence mode active so playhead position is preserved
@@ -885,7 +943,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             // Library clip should always start from beginning, not timeline position
             videoRef.current.currentTime = 0;
             videoRef.current.play().catch(err => {
-              console.error('[VideoPlayer] Play error:', err);
+              // AbortError is expected when video is loading, filter it out
+              if (err.name !== 'AbortError') {
+                console.error('[VideoPlayer] Play error:', err);
+              }
             });
             onPlayingChange(true);
             setPlayerState(prev => ({ ...prev, isPlaying: true, currentTime: 0 }));
@@ -935,7 +996,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               setSequenceTime(playheadPos);
               onPlayheadChange(playheadPos);
               videoRef.current.play().catch(err => {
-                console.error('[VideoPlayer] Resume play error:', err);
+                // AbortError is expected when video is loading, filter it out
+                if (err.name !== 'AbortError') {
+                  console.error('[VideoPlayer] Resume play error:', err);
+                }
               });
               onPlayingChange(true);
               setPlayerState(prev => ({ ...prev, isPlaying: true }));
@@ -998,11 +1062,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           
           // Start playback
           videoRef.current.play().catch(err => {
-            console.error('[VideoPlayer] Play error:', err);
-            setPlayerState(prev => ({
-              ...prev,
-              error: 'Failed to play video',
-            }));
+            // AbortError is expected when video is loading, filter it out
+            if (err.name !== 'AbortError') {
+              console.error('[VideoPlayer] Play error:', err);
+              setPlayerState(prev => ({
+                ...prev,
+                error: 'Failed to play video',
+              }));
+            }
           });
           onPlayingChange(true);
           setPlayerState(prev => ({ ...prev, isPlaying: true }));
@@ -1039,14 +1106,41 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   /**
    * Sync isPlaying state with video element
+   * Waits for video to be ready before playing to avoid AbortError
    */
   useEffect(() => {
     if (!videoRef.current) return;
 
     if (isPlaying && videoRef.current.paused) {
-      videoRef.current.play().catch(err => {
-        console.error('[VideoPlayer] Play error:', err);
-      });
+      // Check if video has enough data loaded before playing
+      // readyState: 0=HAVE_NOTHING, 1=HAVE_METADATA, 2=HAVE_CURRENT_DATA, 3=HAVE_FUTURE_DATA, 4=HAVE_ENOUGH_DATA
+      if (videoRef.current.readyState >= 2) {
+        // Video has metadata and current data, safe to play
+        videoRef.current.play().catch(err => {
+          // AbortError is expected when video is loading, filter it out
+          if (err.name !== 'AbortError') {
+            console.error('[VideoPlayer] Play error:', err);
+          }
+        });
+      } else {
+        // Video not ready yet, wait for canplay event
+        const handleCanPlay = () => {
+          if (videoRef.current && isPlaying && videoRef.current.paused) {
+            videoRef.current.play().catch(err => {
+              if (err.name !== 'AbortError') {
+                console.error('[VideoPlayer] Play error (after canplay):', err);
+              }
+            });
+          }
+          videoRef.current?.removeEventListener('canplay', handleCanPlay);
+        };
+        videoRef.current.addEventListener('canplay', handleCanPlay);
+        
+        // Cleanup listener if component unmounts or isPlaying changes
+        return () => {
+          videoRef.current?.removeEventListener('canplay', handleCanPlay);
+        };
+      }
     } else if (!isPlaying && !videoRef.current.paused) {
       videoRef.current.pause();
     }
