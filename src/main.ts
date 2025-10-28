@@ -7,17 +7,29 @@ if (started) {
   app.quit();
 }
 
+/**
+ * Creates the main application window with ollo specifications:
+ * - 1200x800px initial size, centered on screen
+ * - Minimum size 1280x720px (per prd-v1.md requirements)
+ * - Context isolation enabled for security
+ * - Title set to "ollo"
+ */
 const createWindow = () => {
-  // Create the browser window.
+  // Create the browser window with ollo specifications
   const mainWindow = new BrowserWindow({
-    width: 800,
-    height: 600,
+    width: 1200,
+    height: 800,
+    minWidth: 1280,
+    minHeight: 720,
+    title: 'ollo',
+    center: true,
     webPreferences: {
+      contextIsolation: true, // Required for security (prd-v1.md)
       preload: path.join(__dirname, 'preload.js'),
     },
   });
 
-  // and load the index.html of the app.
+  // Load the index.html of the app (Vite handles dev vs production)
   if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
   } else {
@@ -26,31 +38,26 @@ const createWindow = () => {
     );
   }
 
-  // Open the DevTools.
-  mainWindow.webContents.openDevTools();
+  // Open DevTools in development mode
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    mainWindow.webContents.openDevTools();
+  }
 };
 
-// This method will be called when Electron has finished
-// initialization and is ready to create browser windows.
-// Some APIs can only be used after this event occurs.
+// Create window when Electron is ready
 app.on('ready', createWindow);
 
-// Quit when all windows are closed, except on macOS. There, it's common
-// for applications and their menu bar to stay active until the user quits
-// explicitly with Cmd + Q.
+// Quit when all windows are closed, except on macOS
+// On macOS, apps stay active until explicitly quit with Cmd + Q
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     app.quit();
   }
 });
 
+// On macOS, re-create window when dock icon is clicked and no windows open
 app.on('activate', () => {
-  // On OS X it's common to re-create a window in the app when the
-  // dock icon is clicked and there are no other windows open.
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
 });
-
-// In this file you can include the rest of your app's specific main process
-// code. You can also put them in separate files and import them here.
