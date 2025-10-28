@@ -41,6 +41,10 @@ interface TimelineProps {
   onZoomChange: (zoom: number) => void;
   /** Callback when scroll position changes */
   onScrollChange: (scrollPosition: number) => void;
+  /** Callback when playhead position changes (from dragging) */
+  onPlayheadChange?: (position: number) => void;
+  /** Total duration for playhead dragging */
+  totalDuration?: number;
 }
 
 const Timeline: React.FC<TimelineProps> = ({
@@ -57,6 +61,7 @@ const Timeline: React.FC<TimelineProps> = ({
   onClearAll,
   onZoomChange,
   onScrollChange,
+  onPlayheadChange,
 }) => {
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const clipsContainerRef = useRef<HTMLDivElement>(null);
@@ -67,6 +72,8 @@ const Timeline: React.FC<TimelineProps> = ({
   const [libraryInsertIndex, setLibraryInsertIndex] = useState<number | null>(null);
   const hasAutoFittedRef = useRef(false); // Track if auto-fit has been applied
   const previousTimelineLengthRef = useRef(0);
+  const isDraggingPlayheadRef = useRef(false); // Track if playhead is being dragged
+  const dragEndTimeRef = useRef(0); // Track when drag ended to prevent click after drag
 
   // Sort timeline clips by order (needed for calculations)
   const sortedTimeline = [...timeline].sort((a, b) => a.order - b.order);
@@ -248,12 +255,62 @@ const Timeline: React.FC<TimelineProps> = ({
     e.dataTransfer.setData('application/timeline-clip-index', String(clipIndex));
   };
 
-  // Handle click on empty timeline area
+  // Handle click on timeline to seek playhead
   const handleTimelineClick = (e: React.MouseEvent) => {
-    // Only deselect if clicking directly on timeline container
-    if (e.target === timelineContainerRef.current || e.target === clipsContainerRef.current) {
-      onSelectClip(null);
+    // Don't handle if we just finished dragging playhead (prevent click after drag)
+    const timeSinceDragEnd = Date.now() - dragEndTimeRef.current;
+    if (timeSinceDragEnd < 200) { // 200ms threshold to prevent click after drag
+      console.log('[Timeline] Ignoring click (too soon after drag)');
+      return;
     }
+    
+    // Don't handle if currently dragging playhead
+    if (isDraggingPlayheadRef.current) {
+      console.log('[Timeline] Ignoring click (playhead is being dragged)');
+      return;
+    }
+    
+    // Don't handle if clicking on playhead (let playhead handle its own drag)
+    if ((e.target as HTMLElement).classList.contains('playhead')) {
+      return;
+    }
+    
+    // Only handle if clicking directly on timeline container or clips container
+    if (e.target === timelineContainerRef.current || e.target === clipsContainerRef.current || (e.target as HTMLElement).classList.contains('timeline-clips-container')) {
+      if (onPlayheadChange && clipsContainerRef.current && timelineContainerRef.current) {
+        const rect = clipsContainerRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        // Account for scroll position
+        const scrollX = timelineContainerRef.current.scrollLeft;
+        const absoluteX = x + scrollX;
+        
+        // Convert pixels to seconds
+        const BASE_PIXELS_PER_SECOND = 10;
+        const newPosition = absoluteX / (timelineZoom * BASE_PIXELS_PER_SECOND);
+        
+        // Clamp to valid range
+        const clampedPosition = Math.max(0, Math.min(newPosition, totalDuration));
+        console.log('[Timeline] Click seek to:', clampedPosition, 'seconds');
+        onPlayheadChange(clampedPosition);
+      } else {
+        // Just deselect if no playhead change handler
+        onSelectClip(null);
+      }
+    }
+  };
+
+  // Wrapper for playhead change that tracks drag state
+  const handlePlayheadDragChange = (position: number) => {
+    isDraggingPlayheadRef.current = true;
+    if (onPlayheadChange) {
+      onPlayheadChange(position);
+    }
+  };
+
+  // Handle playhead drag end
+  const handlePlayheadDragEnd = () => {
+    isDraggingPlayheadRef.current = false;
+    dragEndTimeRef.current = Date.now();
   };
 
   // Handle Delete key
@@ -329,6 +386,9 @@ const Timeline: React.FC<TimelineProps> = ({
             position={currentPlayheadPosition}
             zoom={timelineZoom}
             timelineHeight={110}
+            onDrag={handlePlayheadDragChange}
+            onDragEnd={handlePlayheadDragEnd}
+            totalDuration={totalDuration}
           />
 
           {/* Drop zone before first clip (for library drag) */}
