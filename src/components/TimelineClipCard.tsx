@@ -26,6 +26,22 @@ interface TimelineClipCardProps {
   onDelete: () => void;
   /** Clip index in timeline */
   clipIndex: number;
+  /** Callback when trim handle drag starts */
+  onTrimStart?: (clipId: string, edge: 'left' | 'right', e: React.MouseEvent) => void;
+  /** Callback when hover state changes on trim edge */
+  onEdgeHoverChange?: (clipId: string | null, edge: 'left' | 'right' | null) => void;
+  /** Which edge is currently hovered (for this clip) */
+  hoveredEdge?: 'left' | 'right' | null;
+  /** Whether this clip is currently being trimmed */
+  isTrimming?: boolean;
+  /** Preview inPoint during drag (overrides clip.trimStart if provided) */
+  draggedInPoint?: number | null;
+  /** Preview outPoint during drag (overrides clip.trimEnd if provided) */
+  draggedOutPoint?: number | null;
+  /** Fixed inPoint value (when dragging right handle, this is the initial trimStart) */
+  fixedInPoint?: number | null;
+  /** Fixed outPoint value (when dragging left handle, this is the initial trimEnd) */
+  fixedOutPoint?: number | null;
 }
 
 /** Base height for timeline clips at 100% zoom */
@@ -43,6 +59,14 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
   onDragStart,
   onDelete,
   clipIndex,
+  onTrimStart,
+  onEdgeHoverChange,
+  hoveredEdge,
+  isTrimming,
+  draggedInPoint,
+  draggedOutPoint,
+  fixedInPoint,
+  fixedOutPoint,
 }) => {
   const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string>('');
 
@@ -60,8 +84,18 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
     loadThumbnail();
   }, [libraryClip.thumbnail]);
 
-  const clipDuration = clip.trimEnd - clip.trimStart;
-  let clipWidth = calculateClipWidth(clip, libraryClip, zoom);
+  // Use dragged trim values during drag, with fixed values as fallback
+  // When dragging left handle: draggedInPoint changes, fixedOutPoint is used for right edge
+  // When dragging right handle: draggedOutPoint changes, fixedInPoint is used for left edge
+  const displayTrimStart = draggedInPoint ?? fixedInPoint ?? clip.trimStart;
+  const displayTrimEnd = draggedOutPoint ?? fixedOutPoint ?? clip.trimEnd;
+  
+  const clipDuration = displayTrimEnd - displayTrimStart;
+  let clipWidth = calculateClipWidth(
+    { ...clip, trimStart: displayTrimStart, trimEnd: displayTrimEnd },
+    libraryClip,
+    zoom
+  );
   // Ensure minimum width for visibility, maximum to prevent overflow
   // These constants must match timelineCalculations.ts MIN/MAX_CLIP_WIDTH
   clipWidth = Math.max(50, Math.min(clipWidth, 5000)); // Min 50px, max 5000px
@@ -79,6 +113,49 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
   const handleDeleteClick = (e: React.MouseEvent) => {
     e.stopPropagation(); // Prevent clip selection when clicking delete
     onDelete();
+  };
+
+  // Handle trim handle interactions
+  const handleLeftTrimMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation(); // Prevent clip drag
+    if (onTrimStart) {
+      onTrimStart(clip.id, 'left', e);
+    }
+  };
+
+  const handleRightTrimMouseDown = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation(); // Prevent clip drag
+    if (onTrimStart) {
+      onTrimStart(clip.id, 'right', e);
+    }
+  };
+
+  const handleLeftTrimClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent clip selection
+  };
+
+  const handleRightTrimClick = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent clip selection
+  };
+
+  const handleLeftTrimMouseEnter = () => {
+    if (onEdgeHoverChange && !isTrimming) {
+      onEdgeHoverChange(clip.id, 'left');
+    }
+  };
+
+  const handleRightTrimMouseEnter = () => {
+    if (onEdgeHoverChange && !isTrimming) {
+      onEdgeHoverChange(clip.id, 'right');
+    }
+  };
+
+  const handleTrimMouseLeave = () => {
+    if (onEdgeHoverChange && !isTrimming) {
+      onEdgeHoverChange(null, null);
+    }
   };
 
   return (
@@ -126,9 +203,31 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
         >
           ×
         </button>
-        {/* Trim handles (visual only, non-functional for PR-3) */}
-        <div className="timeline-clip-trim-handle timeline-clip-trim-handle-left" />
-        <div className="timeline-clip-trim-handle timeline-clip-trim-handle-right" />
+        {/* Trim handles */}
+        <div
+          className={`timeline-clip-trim-handle timeline-clip-trim-handle-left ${
+            hoveredEdge === 'left' ? 'trim-handle-hovered' : ''
+          } ${isTrimming && hoveredEdge === 'left' ? 'trim-handle-dragging' : ''}`}
+          onMouseDown={handleLeftTrimMouseDown}
+          onMouseEnter={handleLeftTrimMouseEnter}
+          onMouseLeave={handleTrimMouseLeave}
+          onClick={handleLeftTrimClick}
+          style={{
+            cursor: hoveredEdge === 'left' || (isTrimming && hoveredEdge === 'left') ? 'ew-resize' : 'default',
+          }}
+        />
+        <div
+          className={`timeline-clip-trim-handle timeline-clip-trim-handle-right ${
+            hoveredEdge === 'right' ? 'trim-handle-hovered' : ''
+          } ${isTrimming && hoveredEdge === 'right' ? 'trim-handle-dragging' : ''}`}
+          onMouseDown={handleRightTrimMouseDown}
+          onMouseEnter={handleRightTrimMouseEnter}
+          onMouseLeave={handleTrimMouseLeave}
+          onClick={handleRightTrimClick}
+          style={{
+            cursor: hoveredEdge === 'right' || (isTrimming && hoveredEdge === 'right') ? 'ew-resize' : 'default',
+          }}
+        />
       </div>
       <div className="timeline-clip-filename">
         {displayFilename}

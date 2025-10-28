@@ -11,8 +11,10 @@ import TimelineClipCard from './TimelineClipCard';
 import TimelineZoomControls from './TimelineZoomControls';
 import Playhead from './Playhead';
 import TimeRuler from './TimeRuler';
+import TrimTooltip from './TrimTooltip';
 import { calculateClipPosition, calculateTotalDuration, calculateAutoFitZoom, calculateClipWidth, applyClipWidthConstraints } from '../utils/timelineCalculations';
 import { formatDuration } from '../utils/formatDuration';
+import { useTrimDrag } from '../hooks/useTrimDrag';
 
 interface TimelineProps {
   /** Array of timeline clips */
@@ -45,6 +47,8 @@ interface TimelineProps {
   onPlayheadChange?: (position: number) => void;
   /** Total duration for playhead dragging */
   totalDuration?: number;
+  /** Callback when trim values are updated */
+  onTrimUpdate?: (clipId: string, trimStart: number, trimEnd: number) => void;
 }
 
 const Timeline: React.FC<TimelineProps> = ({
@@ -62,6 +66,7 @@ const Timeline: React.FC<TimelineProps> = ({
   onZoomChange,
   onScrollChange,
   onPlayheadChange,
+  onTrimUpdate,
 }) => {
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const clipsContainerRef = useRef<HTMLDivElement>(null);
@@ -74,6 +79,10 @@ const Timeline: React.FC<TimelineProps> = ({
   const previousTimelineLengthRef = useRef(0);
   const isDraggingPlayheadRef = useRef(false); // Track if playhead is being dragged
   const dragEndTimeRef = useRef(0); // Track when drag ended to prevent click after drag
+  const [hoveredEdge, setHoveredEdge] = useState<{ clipId: string; edge: 'left' | 'right' } | null>(null);
+
+  // Trim drag hook for centralized state management
+  const trimDrag = useTrimDrag(timelineZoom);
 
   // Sort timeline clips by order (needed for calculations)
   const sortedTimeline = [...timeline].sort((a, b) => a.order - b.order);
@@ -313,6 +322,190 @@ const Timeline: React.FC<TimelineProps> = ({
     dragEndTimeRef.current = Date.now();
   };
 
+  /**
+   * Handle trim start - called when user clicks on trim handle
+   */
+  const handleTrimStart = (clipId: string, edge: 'left' | 'right', event: React.MouseEvent) => {
+    // Find clip and library clip
+    const clip = timeline.find(c => c.id === clipId);
+    if (!clip) {
+      console.error('[Timeline] Clip not found for trim:', clipId);
+      return;
+    }
+
+    const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
+    if (!libraryClip) {
+      console.error('[Timeline] Library clip not found for trim:', clip.libraryClipId);
+      return;
+    }
+
+    // Find clip index in sorted timeline
+    const clipIndex = sortedTimeline.findIndex(c => c.id === clipId);
+    if (clipIndex < 0) {
+      console.error('[Timeline] Clip index not found for trim:', clipId);
+      return;
+    }
+
+    // Calculate clip position
+    const clipStartX = calculateClipPosition(clipIndex, sortedTimeline, library, timelineZoom);
+    
+    // Calculate initial clip width (before any trimming)
+    const initialClipWidth = applyClipWidthConstraints(
+      calculateClipWidth(clip, libraryClip, timelineZoom)
+    );
+    
+    // Calculate timeline start time (cumulative time before this clip)
+    let timelineStartTime = 0;
+    for (let i = 0; i < clipIndex; i++) {
+      const prevClip = sortedTimeline[i];
+      const prevLibraryClip = library.find(lc => lc.id === prevClip.libraryClipId);
+      if (prevLibraryClip) {
+        timelineStartTime += prevClip.trimEnd - prevClip.trimStart;
+      }
+    }
+
+    // Convert mouse position to timeline container coordinates (accounting for scroll)
+    const containerRect = timelineContainerRef.current?.getBoundingClientRect();
+    if (!containerRect) {
+      console.error('[Timeline] Cannot get timeline container rect');
+      return;
+    }
+
+    const mouseX = event.clientX - containerRect.left;
+    const scrollX = timelineContainerRef.current?.scrollLeft || 0;
+    const absoluteMouseX = mouseX + scrollX;
+    const clipRelativeMouseX = absoluteMouseX - clipStartX;
+
+    // Start trim drag
+    trimDrag.handleTrimStart(
+      clipId,
+      edge,
+      clip.trimStart,
+      clip.trimEnd,
+      clipStartX,
+      clipRelativeMouseX,
+      event.clientY,
+      timelineStartTime,
+      initialClipWidth
+    );
+
+    // Update hover state to persist during drag
+    setHoveredEdge({ clipId, edge });
+  };
+
+  /**
+   * Handle edge hover change - called when mouse enters/leaves trim handle
+   */
+  const handleEdgeHoverChange = (clipId: string | null, edge: 'left' | 'right' | null) => {
+    if (clipId && edge) {
+      setHoveredEdge({ clipId, edge });
+    } else {
+      setHoveredEdge(null);
+    }
+  };
+
+  /**
+   * Global mouse listeners for trim drag (allows dragging beyond clip boundaries)
+   */
+  useEffect(() => {
+    if (!trimDrag.dragging) {
+      return; // No cleanup needed if not dragging
+    }
+
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const containerRect = timelineContainerRef.current?.getBoundingClientRect();
+      if (!containerRect) return;
+
+      // Calculate mouse position relative to timeline container
+      const mouseX = e.clientX - containerRect.left;
+      const scrollX = timelineContainerRef.current?.scrollLeft || 0;
+      const absoluteMouseX = mouseX + scrollX;
+
+      // Find clip being trimmed
+      const clip = timeline.find(c => c.id === trimDrag.dragging!.clipId);
+      if (!clip) return;
+
+      const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
+      if (!libraryClip) return;
+
+      const clipIndex = sortedTimeline.findIndex(c => c.id === clip.id);
+      if (clipIndex < 0) return;
+
+      const clipStartX = calculateClipPosition(clipIndex, sortedTimeline, library, timelineZoom);
+      const clipRelativeMouseX = absoluteMouseX - clipStartX;
+
+      // Update trim drag position
+      trimDrag.handleTrimMove(
+        clipRelativeMouseX,
+        libraryClip.duration,
+        e.clientX,
+        e.clientY,
+        clipStartX
+      );
+    };
+
+    const handleGlobalMouseUp = async (e: MouseEvent) => {
+      if (!trimDrag.dragging) return;
+
+      const clipId = trimDrag.dragging.clipId;
+      const clip = timeline.find(c => c.id === clipId);
+      if (!clip) {
+        console.error('[Timeline] Clip not found for trim commit:', clipId);
+        trimDrag.handleTrimEnd();
+        return;
+      }
+
+      const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
+      if (!libraryClip) {
+        console.error('[Timeline] Library clip not found for trim commit:', clip.libraryClipId);
+        trimDrag.handleTrimEnd();
+        return;
+      }
+
+      // Get final trim values (use dragged values if available, otherwise use fixed values, then clip's current value)
+      // When dragging left: draggedInPoint changes, fixedOutPoint is the fixed right edge
+      // When dragging right: draggedOutPoint changes, fixedInPoint is the fixed left edge
+      const finalInPoint = trimDrag.draggedInPoint !== null 
+        ? trimDrag.draggedInPoint 
+        : (trimDrag.fixedInPoint !== null ? trimDrag.fixedInPoint : clip.trimStart);
+      const finalOutPoint = trimDrag.draggedOutPoint !== null 
+        ? trimDrag.draggedOutPoint 
+        : (trimDrag.fixedOutPoint !== null ? trimDrag.fixedOutPoint : clip.trimEnd);
+
+      try {
+        // Call IPC handler to validate trim values
+        const result = await window.electron.trim.trimClip(
+          clipId,
+          finalInPoint,
+          finalOutPoint,
+          libraryClip.duration
+        );
+
+        if (result.success && onTrimUpdate) {
+          // Update App state via callback
+          onTrimUpdate(clipId, result.inPoint, result.outPoint);
+        }
+      } catch (error) {
+        console.error('[Timeline] Trim validation failed:', error);
+        // Don't update state if validation fails
+      } finally {
+        // Always clear drag state
+        trimDrag.handleTrimEnd();
+        setHoveredEdge(null);
+      }
+    };
+
+    // Attach global listeners
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+
+    // Cleanup
+    return () => {
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+  }, [trimDrag.dragging, trimDrag.draggedInPoint, trimDrag.draggedOutPoint, timeline, library, sortedTimeline, timelineZoom, onTrimUpdate, trimDrag.handleTrimMove, trimDrag.handleTrimEnd]);
+
   // Handle Delete key
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -413,8 +606,34 @@ const Timeline: React.FC<TimelineProps> = ({
             const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
             if (!libraryClip) return null;
 
-            const clipPosition = calculateClipPosition(index, sortedTimeline, library, timelineZoom);
-            const clipWidth = applyClipWidthConstraints(calculateClipWidth(clip, libraryClip, timelineZoom));
+            // Check if this clip is being trimmed and calculate adjusted position
+            const isThisClipTrimming = trimDrag.dragging?.clipId === clip.id;
+            const isLeftHandleDragging = isThisClipTrimming && trimDrag.dragging?.edge === 'left';
+            
+            // Calculate base clip position (from cumulative widths of previous clips)
+            let clipPosition = calculateClipPosition(index, sortedTimeline, library, timelineZoom);
+            
+            // Calculate clip width with current (or dragged) trim values
+            let displayTrimStart = clip.trimStart;
+            let displayTrimEnd = clip.trimEnd;
+            
+            if (isThisClipTrimming) {
+              displayTrimStart = trimDrag.draggedInPoint ?? trimDrag.fixedInPoint ?? clip.trimStart;
+              displayTrimEnd = trimDrag.draggedOutPoint ?? trimDrag.fixedOutPoint ?? clip.trimEnd;
+            }
+            
+            // Calculate width with displayed trim values
+            const displayClip = { ...clip, trimStart: displayTrimStart, trimEnd: displayTrimEnd };
+            const clipWidth = applyClipWidthConstraints(calculateClipWidth(displayClip, libraryClip, timelineZoom));
+            
+            // If dragging left handle, adjust position to keep right edge fixed
+            // Right edge position = originalPosition + originalWidth
+            // To keep right edge fixed: newPosition = rightEdgePosition - newWidth
+            if (isLeftHandleDragging && trimDrag.dragging && trimDrag.dragging.initialClipWidth > 0) {
+              const originalWidth = trimDrag.dragging.initialClipWidth;
+              const rightEdgePosition = trimDrag.dragging.initialClipStartX + originalWidth;
+              clipPosition = rightEdgePosition - clipWidth;
+            }
 
             return (
               <React.Fragment key={clip.id}>
@@ -472,6 +691,14 @@ const Timeline: React.FC<TimelineProps> = ({
                     onDragStart={handleClipDragStart}
                     onDelete={() => onDeleteClip(clip.id)}
                     clipIndex={index}
+                    onTrimStart={handleTrimStart}
+                    onEdgeHoverChange={handleEdgeHoverChange}
+                    hoveredEdge={hoveredEdge?.clipId === clip.id ? hoveredEdge.edge : null}
+                    isTrimming={trimDrag.dragging?.clipId === clip.id}
+                    draggedInPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.draggedInPoint : null}
+                    draggedOutPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.draggedOutPoint : null}
+                    fixedInPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.fixedInPoint : null}
+                    fixedOutPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.fixedOutPoint : null}
                   />
                 </div>
 
@@ -556,6 +783,31 @@ const Timeline: React.FC<TimelineProps> = ({
           timelineContainerRef={timelineContainerRef}
         />
       </div>
+
+      {/* Trim Tooltip */}
+      {trimDrag.dragging && trimDrag.tooltipVisible && (() => {
+        const clip = timeline.find(c => c.id === trimDrag.dragging!.clipId);
+        if (!clip) return null;
+
+        const originalDuration = clip.trimEnd - clip.trimStart;
+        const newInPoint = trimDrag.draggedInPoint ?? clip.trimStart;
+        const newOutPoint = trimDrag.draggedOutPoint ?? clip.trimEnd;
+        const newDuration = newOutPoint - newInPoint;
+        
+        // Determine if expanding (trimStart decreased or trimEnd increased)
+        const isExpanding = (trimDrag.draggedInPoint !== null && trimDrag.draggedInPoint < clip.trimStart) ||
+                           (trimDrag.draggedOutPoint !== null && trimDrag.draggedOutPoint > clip.trimEnd);
+
+        return (
+          <TrimTooltip
+            originalDuration={originalDuration}
+            newDuration={newDuration}
+            position={trimDrag.tooltipPosition}
+            visible={trimDrag.tooltipVisible}
+            isExpanding={isExpanding}
+          />
+        );
+      })()}
     </div>
   );
 };

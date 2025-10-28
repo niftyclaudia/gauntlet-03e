@@ -258,6 +258,76 @@ export function registerIpcHandlers(): void {
     }
   });
 
+  /**
+   * Handler: trim:trimClip
+   * Validates trim values for a timeline clip
+   * Params: clipId (string), inPoint (number), outPoint (number), clipDuration (number)
+   * Returns: Promise<{ success: boolean; inPoint: number; outPoint: number }>
+   * Errors: Throws Error if validation fails
+   * 
+   * Note: This handler validates trim values only. The renderer ensures the clip exists
+   * before calling. clipDuration is provided to validate trimEnd doesn't exceed source duration.
+   */
+  ipcMain.handle('trim:trimClip', async (
+    _event, 
+    clipId: string, 
+    inPoint: number, 
+    outPoint: number,
+    clipDuration: number
+  ): Promise<{ success: boolean; inPoint: number; outPoint: number }> => {
+    try {
+      // Validate clipId is provided
+      if (!clipId || typeof clipId !== 'string') {
+        throw new Error(`Invalid clipId: ${clipId}`);
+      }
+
+      // Validate inPoint and outPoint are numbers
+      if (typeof inPoint !== 'number' || isNaN(inPoint)) {
+        throw new Error(`Invalid inPoint: ${inPoint}`);
+      }
+      if (typeof outPoint !== 'number' || isNaN(outPoint)) {
+        throw new Error(`Invalid outPoint: ${outPoint}`);
+      }
+
+      // Validate inPoint >= 0
+      if (inPoint < 0) {
+        throw new Error(`Invalid trim values: inPoint must be >= 0 (got ${inPoint})`);
+      }
+
+      // Validate outPoint > inPoint
+      if (outPoint <= inPoint) {
+        throw new Error(`Invalid trim values: outPoint must be > inPoint (got inPoint=${inPoint}, outPoint=${outPoint})`);
+      }
+
+      // Validate minimum duration (0.5 seconds)
+      const duration = outPoint - inPoint;
+      if (duration < 0.5) {
+        throw new Error(`Trim duration must be at least 0.5 seconds (got ${duration.toFixed(2)}s)`);
+      }
+
+      // Validate outPoint <= clipDuration (cannot exceed source clip duration)
+      if (outPoint > clipDuration) {
+        throw new Error(`Invalid trim values: outPoint (${outPoint}) cannot exceed clip duration (${clipDuration})`);
+      }
+
+      // Validate inPoint < clipDuration
+      if (inPoint >= clipDuration) {
+        throw new Error(`Invalid trim values: inPoint (${inPoint}) must be < clip duration (${clipDuration})`);
+      }
+
+      console.log(`[IPC] Trim validation successful for clip ${clipId}: inPoint=${inPoint.toFixed(2)}s, outPoint=${outPoint.toFixed(2)}s`);
+
+      return {
+        success: true,
+        inPoint,
+        outPoint,
+      };
+    } catch (error) {
+      console.error('[IPC] Trim validation error:', error);
+      throw error;
+    }
+  });
+
   console.log('[IPC] All handlers registered successfully');
 }
 

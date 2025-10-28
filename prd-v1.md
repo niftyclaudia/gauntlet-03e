@@ -520,7 +520,7 @@ npm start  # Launch dev mode
 - Implement scrubbing with playhead
 - Validation: Clicking a clip plays it in preview with audio, scrubbing works smoothly
 
-### Phase 5: Auto-Save & Session Recovery
+### Phase 5: Auto-Save & Session Recovery COMPLETE
 - Implement auto-save function (serialize state to JSON)
 - Set up 30-second interval to trigger auto-save
 - Write autosave file to ~/Library/Application Support/ollo/
@@ -530,14 +530,14 @@ npm start  # Launch dev mode
 - Implement "Start Fresh" function (delete autosave)
 - Validation: Close app, reopen, and successfully restore session
 
-### Phase 6: Trimming
-- Add visual trim handles to clip cards
-- Implement drag logic for trim handles
-- Update clip state with new trim start/end times
-- Prevent handles from crossing (min duration check)
-- Update duration display when trimming
-- Preview reflects trimmed clip in player
-- Validation: Can trim start/end of clips, preview shows trimmed version
+### Phase 6: Trimming COMPLETE
+- [x] Add visual trim handles to clip cards
+- [x] Implement drag logic for trim handles
+- [x] Update clip state with new trim start/end times
+- [x] Prevent handles from crossing (min duration check)
+- [x] Update duration display when trimming
+- [x] Preview reflects trimmed clip in player
+- [x] Validation: Can trim start/end of clips, preview shows trimmed version
 
 ### Phase 7: Sequence Preview
 - Implement "Preview Sequence" mode
