@@ -4,7 +4,7 @@
 
 **Version**: 1.0
 
-**Status**: Draft
+**Status**: Complete
 
 **Agent**: Pete
 
@@ -27,26 +27,26 @@ Enable users to preview video clips and sequences by clicking clips in Library o
 **Why now**: This is Phase 4 of the MVP, building on Library (PR-2) and Timeline (PR-3). Video preview is essential for users to make informed editing decisions and verify their sequence works before exporting.
 
 **Goals** (ordered, measurable):
-  - [ ] G1 — User can click clip in Library → video plays in preview player with audio synchronized
-  - [ ] G2 — User can play/pause playback using Spacebar or Play button, with progress bar showing current position
-  - [ ] G3 — User can scrub through video by dragging playhead or progress bar, with preview updates within 100ms
-  - [ ] G4 — User can preview entire sequence from timeline with "Preview Sequence" button, playing all clips in order
+  - [x] G1 — User can click clip in Library → video plays in preview player with audio synchronized
+  - [x] G2 — User can play/pause playback using Spacebar or Play button, with progress bar showing current position
+  - [x] G3 — User can scrub through video by dragging playhead or progress bar, with preview updates within 100ms
+  - [x] G4 — User can preview entire sequence from timeline with "Preview Sequence" button, playing all clips in order
 
 ---
 
 ## 3. Non-Goals / Out of Scope
 
-- [ ] Not implementing trim functionality (PR-6)
-- [ ] Not implementing auto-save (PR-5)
-- [ ] Not implementing video export (PR-8)
-- [ ] Not implementing video effects, filters, or transitions
-- [ ] Not implementing audio volume control or audio effects
-- [ ] Not implementing frame-by-frame scrubbing
-- [ ] Not implementing picture-in-picture or multiple preview windows
-- [ ] Not implementing fullscreen preview mode
-- [ ] Not implementing playback speed controls (slow motion, fast forward)
-- [ ] Not implementing keyboard shortcuts beyond Spacebar (play/pause)
-- [ ] Windows or Linux support (macOS only for MVP)
+- [x] Not implementing trim functionality (PR-6)
+- [x] Not implementing auto-save (PR-5)
+- [x] Not implementing video export (PR-8)
+- [x] Not implementing video effects, filters, or transitions
+- [x] Not implementing audio volume control or audio effects
+- [x] Not implementing frame-by-frame scrubbing
+- [x] Not implementing picture-in-picture or multiple preview windows
+- [x] Not implementing fullscreen preview mode
+- [x] Not implementing playback speed controls (slow motion, fast forward)
+- [x] Not implementing keyboard shortcuts beyond Spacebar (play/pause)
+- [x] Windows or Linux support (macOS only for MVP)
 
 ---
 
@@ -419,25 +419,25 @@ const handleSequenceClipEnd = () => {
 ## 13. Definition of Done
 
 See standards in prd-v1.md and .cursorrules:
-- [ ] VideoPlayer component implemented with HTML5 video element
-- [ ] PlayerControls component with Play/Pause, progress bar, time display
-- [ ] SequencePreviewButton component functional
-- [ ] Click handler on Library clips loads video in preview
-- [ ] Click handler on Timeline clips loads video with trim points (if available)
-- [ ] Play/Pause button toggles playback
-- [ ] Spacebar keyboard shortcut works for play/pause
-- [ ] Progress bar is draggable and seeks video
-- [ ] Time display shows current/total time (MM:SS)
-- [ ] Playhead syncs with video player (bidirectional)
-- [ ] "Preview Sequence" button plays all timeline clips in order
-- [ ] Sequence preview applies trim points and stops at end
-- [ ] Video maintains 16:9 aspect ratio (letterbox/pillarbox)
-- [ ] Loading and error states displayed
-- [ ] All acceptance gates pass
-- [ ] Performance targets met (30fps playback, <100ms scrubbing)
-- [ ] TypeScript types correct, no console errors
-- [ ] Cross-platform testing done (macOS primary)
-- [ ] Code follows .cursorrules patterns
+- [x] VideoPlayer component implemented with HTML5 video element
+- [x] PlayerControls component with Play/Pause, progress bar, time display
+- [x] SequencePreviewButton component functional
+- [x] Click handler on Library clips loads video in preview
+- [x] Click handler on Timeline clips loads video with trim points (if available)
+- [x] Play/Pause button toggles playback
+- [x] Spacebar keyboard shortcut works for play/pause
+- [x] Progress bar is draggable and seeks video
+- [x] Time display shows current/total time (MM:SS)
+- [x] Playhead syncs with video player (bidirectional)
+- [x] "Preview Sequence" button plays all timeline clips in order
+- [x] Sequence preview applies trim points and stops at end
+- [x] Video maintains 16:9 aspect ratio (letterbox/pillarbox)
+- [x] Loading and error states displayed
+- [x] All acceptance gates pass
+- [x] Performance targets met (30fps playback, <100ms scrubbing)
+- [x] TypeScript types correct, no console errors
+- [x] Cross-platform testing done (macOS primary)
+- [x] Code follows .cursorrules patterns
 
 ---
 
