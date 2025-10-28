@@ -1,0 +1,245 @@
+# Gauntlet-03 Agent Rules
+
+## Quick Agent Commands
+
+When you see a message like "cody pr-3" or "pete pr-5", automatically use the appropriate agent template:
+
+### Agent Mapping:
+- **brad** → Brad Agent (Brief Creation - Product Strategy)
+- **cody** → Cody Agent (Building/Implementation - Video Editor Features)
+- **pete** → Pete Agent (Planning/PRD Creation)  
+
+### Usage Pattern:
+```
+[agent-name] pr-[number]  OR  [agent-name] p[number]  OR  [agent-name] s[number]  OR  [agent-name]2[number]  OR  [agent-name]2 pr[number]
+```
+
+**All formats work (for maximum flexibility across branches):**
+- `brad pr-1` or `brad p1` or `brad s1` or `brad2 1` or `brad2 pr1` → Same result
+- `cody pr-3` or `cody p3` or `cody s3` or `cody2 3` or `cody2 pr3` → Same result
+- `pete pr-5` or `pete p5` or `pete s5` or `pete2 5` or `pete2 pr5` → Same result  
+
+### Template Location:
+All agent templates are in: `agents/[agent-name]-agent-template.md`
+
+Replace in the template:
+- `[AGENT_NAME]` with the agent name (Brad, Cody, Pete)
+- `[AGENT_ROLE]` with their role description
+- `[agent-type]` with the agent type (brad, cody, pete)
+- `[NUMBER]` with the PR number
+
+### Examples:
+- "brad pr-1", "brad p1", or "brad s1" → Brad agent for PR #1 brief creation
+- "cody pr-3", "cody p3", or "cody s3" → Cody agent for PR #3 implementation
+- "pete pr-5", "pete p5", or "pete s5" → Pete agent for PR #5 planning
+
+Always reference the specific agent template file for detailed instructions.
+
+---
+
+# Video Editor Development Rules
+
+## Project Context
+- **Tech Stack**: Electron + Vite + React + TypeScript + FFmpeg
+- **Platform**: macOS (primary), Windows (secondary)
+- **App**: ollo - Desktop video editor MVP
+- **Focus**: Video import, timeline editing, trimming, export
+
+## Core Architecture Principles
+
+### Electron Main Process (TypeScript)
+- All file system operations go through IPC handlers
+- FFmpeg integration for video processing
+- Secure with contextIsolation enabled
+- Background processing for heavy operations
+
+### React Frontend (TypeScript)
+- Functional components with hooks
+- useState/useContext for state management
+- HTML5 video element for playback
+- Custom timeline UI components
+
+### Video Processing
+- Use ffmpeg-static npm package (bundles FFmpeg binary)
+- Extract metadata with FFmpeg
+- Generate thumbnails from first frame
+- Apply trims during export using FFmpeg -ss and -t flags
+
+## Development Patterns
+
+### File Handling
+```typescript
+// Store file paths (not contents) in React state
+const [library, setLibrary] = useState<VideoClip[]>([]);
+
+// Video playback via file:// protocol URLs
+const videoSrc = `file://${filePath}`;
+```
+
+### State Management
+```typescript
+interface AppState {
+  library: VideoClip[];
+  timeline: TimelineClip[];
+  selectedClipId: string | null;
+  currentPlayheadPosition: number;
+  isExporting: boolean;
+  exportProgress: number;
+  timelineZoom: number;
+  timelineScrollPosition: number;
+}
+```
+
+### Electron IPC Commands
+```typescript
+// Preload script exposes API via contextBridge
+window.electron.extractVideoMetadata(filePath: string): Promise<VideoMetadata>
+window.electron.exportVideo(clips: TimelineClip[], outputPath: string): Promise<void>
+
+// Usage in React components
+async function handleImport(filePath: string) {
+  const metadata = await window.electron.extractVideoMetadata(filePath);
+  setLibrary(prev => [...prev, metadata]);
+}
+```
+
+## Performance Requirements
+
+All features MUST maintain these targets (see prd-v1.md for details):
+- **App load time**: < 5 seconds (cold start to interactive UI)
+- **Timeline UI responsiveness**: < 50ms response time for drag operations
+- **Video playback**: Smooth 30fps minimum (1080p H.264 content)
+- **Timeline scrolling**: Smooth 60fps with 10+ clips
+- **Export performance**: < 5 minutes for 2-minute 1080p video
+- **Memory usage**: < 1GB RAM with 10 clips, < 100MB variance over 15min
+- **No UI blocking**: Keep main thread responsive during video operations
+
+## Video Processing Requirements
+
+Every feature involving video operations MUST address (see prd-v1.md for details):
+- **File handling**: Support MP4 and MOV formats only
+- **Metadata extraction**: Use FFmpeg to extract duration, resolution, framerate
+- **Thumbnail generation**: Extract first frame as JPEG
+- **Trim operations**: Store trim data as {startTime, endTime} per clip
+- **Export pipeline**: Use FFmpeg for concatenation and re-encoding
+- **Auto-save**: Save project state every 30 seconds to local file system
+
+## Testing Requirements
+
+Follow manual testing protocol from prd-v1.md:
+- **Manual validation** (mandatory): Test with real video files
+- **Performance verification** (mandatory): Verify targets from prd-v1.md
+- **Cross-platform testing** (mandatory): Test on macOS and Windows
+- **Demo script**: 20-minute validation protocol from prd-v1.md
+
+## Code Quality Standards
+
+### TypeScript Requirements
+- Strict type checking enabled
+- Proper interfaces for all data structures
+- No `any` types without justification
+
+### React Best Practices
+- Functional components with hooks
+- Proper dependency arrays in useEffect
+- Memoization for expensive calculations
+- Error boundaries for video processing
+
+### Error Handling
+- Graceful handling of corrupted video files
+- Clear error messages for unsupported formats
+- Progress indicators for long operations
+- Auto-save functionality every 30 seconds
+
+## Testing Requirements
+
+### Manual Testing Protocol
+- Test with real video files (MP4, MOV)
+- Verify metadata extraction works
+- Test thumbnail generation
+- Validate trim operations
+- Confirm export produces valid MP4 files
+
+### Performance Testing
+- Timeline UI responsive with 10+ clips
+- App load time < 5 seconds
+- Video playback smooth 30fps minimum
+- Export completes without crashes
+- Memory usage < 1GB with 10 clips
+
+### Cross-Platform Testing
+- macOS (primary platform)
+- Windows (secondary platform)
+- File system operations work
+- FFmpeg integration functions
+
+## Common Patterns
+
+### Video Import
+```typescript
+const handleFileDrop = (files: File[]) => {
+  const videoFiles = files.filter(file => 
+    file.type.startsWith('video/') && 
+    (file.name.endsWith('.mp4') || file.name.endsWith('.mov'))
+  );
+  
+  videoFiles.forEach(async (file) => {
+    const metadata = await extractVideoMetadata(file.path);
+    setLibrary(prev => [...prev, { ...metadata, id: uuid() }]);
+  });
+};
+```
+
+### Timeline Management
+```typescript
+const handleClipReorder = (dragIndex: number, hoverIndex: number) => {
+  setTimeline(prev => {
+    const newTimeline = [...prev];
+    const draggedClip = newTimeline[dragIndex];
+    newTimeline.splice(dragIndex, 1);
+    newTimeline.splice(hoverIndex, 0, draggedClip);
+    return newTimeline.map((clip, index) => ({ ...clip, order: index }));
+  });
+};
+```
+
+### Auto-Save Implementation
+```typescript
+useEffect(() => {
+  const interval = setInterval(() => {
+    if (timeline.length > 0) {
+      saveProjectState({
+        library,
+        timeline,
+        selectedClipId,
+        currentPlayheadPosition,
+        timelineZoom,
+        timelineScrollPosition
+      });
+    }
+  }, 30000); // Every 30 seconds
+
+  return () => clearInterval(interval);
+}, [library, timeline, selectedClipId, currentPlayheadPosition, timelineZoom, timelineScrollPosition]);
+```
+
+## Definition of Done
+
+### Feature Complete When:
+- [ ] Electron IPC handlers implemented in main process
+- [ ] React components with all states
+- [ ] Video processing verified with FFmpeg
+- [ ] Auto-save functionality tested
+- [ ] All acceptance gates pass
+- [ ] Cross-platform testing done (macOS primary)
+- [ ] Performance targets met
+- [ ] Documentation updated
+
+### Code Review Checklist:
+- [ ] No console warnings/errors
+- [ ] Proper TypeScript types
+- [ ] Error handling for edge cases
+- [ ] Performance considerations addressed
+- [ ] Video processing operations tested
+- [ ] Auto-save functionality verified
+- [ ] Cross-platform compatibility confirmed
