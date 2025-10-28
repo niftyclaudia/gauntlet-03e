@@ -6,8 +6,16 @@
 
 import { ipcMain, dialog } from 'electron';
 import { extractMetadata, generateThumbnail } from './ffmpeg';
-import { validateFileExists, ensureThumbnailDirectory, getFileSize } from './fileSystem';
-import { VideoMetadata } from '../types/video';
+import { 
+  validateFileExists, 
+  ensureThumbnailDirectory, 
+  getFileSize,
+  writeAutosaveFile,
+  readAutosaveFile,
+  deleteAutosaveFile,
+  getAutosaveFileAge
+} from './fileSystem';
+import { VideoMetadata, SavedProjectState } from '../types/video';
 
 /**
  * Register all IPC handlers
@@ -140,6 +148,113 @@ export function registerIpcHandlers(): void {
     } catch (error) {
       console.error('[IPC] Failed to read thumbnail:', error);
       throw new Error(`Failed to read thumbnail: ${error}`);
+    }
+  });
+
+  /**
+   * Handler: autosave:save
+   * Saves project state to autosave.json file
+   * Params: state (SavedProjectState)
+   * Returns: Promise<void>
+   * Errors: Throws Error if file write fails
+   */
+  ipcMain.handle('autosave:save', async (_event, state: SavedProjectState): Promise<void> => {
+    try {
+      writeAutosaveFile(state);
+    } catch (error) {
+      console.error('[IPC] Failed to save autosave file:', error);
+      throw new Error(`Failed to save autosave file: ${error}`);
+    }
+  });
+
+  /**
+   * Handler: autosave:load
+   * Loads project state from autosave.json file
+   * Returns: Promise<SavedProjectState | null>
+   * Errors: Returns null if file doesn't exist or is invalid
+   */
+  ipcMain.handle('autosave:load', async (): Promise<SavedProjectState | null> => {
+    try {
+      const state = readAutosaveFile();
+      return state;
+    } catch (error) {
+      console.error('[IPC] Failed to load autosave file:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Handler: autosave:delete
+   * Deletes autosave.json file
+   * Returns: Promise<void>
+   * Errors: Handles gracefully if file doesn't exist
+   */
+  ipcMain.handle('autosave:delete', async (): Promise<void> => {
+    try {
+      deleteAutosaveFile();
+    } catch (error) {
+      console.error('[IPC] Failed to delete autosave file:', error);
+      // Don't throw - deletion failure is not critical
+    }
+  });
+
+  /**
+   * Handler: autosave:getAge
+   * Gets autosave file age in milliseconds
+   * Returns: Promise<number | null> (age in milliseconds, null if file doesn't exist)
+   * Errors: Returns null if file doesn't exist
+   */
+  ipcMain.handle('autosave:getAge', async (): Promise<number | null> => {
+    try {
+      const age = getAutosaveFileAge();
+      return age;
+    } catch (error) {
+      console.error('[IPC] Failed to get autosave file age:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Handler: autosave:showRestoreDialog
+   * Shows native dialog asking user to restore session
+   * Params: timestamp (string) - ISO timestamp to display
+   * Returns: Promise<'restore' | 'fresh' | null> - user choice or null if cancelled
+   */
+  ipcMain.handle('autosave:showRestoreDialog', async (_event, timestamp: string): Promise<'restore' | 'fresh' | null> => {
+    try {
+      const result = await dialog.showMessageBox({
+        type: 'question',
+        buttons: ['Restore', 'Start Fresh'],
+        defaultId: 0,
+        cancelId: 1,
+        title: 'Restore previous session?',
+        message: `Would you like to restore your previous editing session?`,
+        detail: `Last saved: ${new Date(timestamp).toLocaleString()}`,
+      });
+
+      if (result.response === 0) {
+        return 'restore';
+      } else {
+        return 'fresh';
+      }
+    } catch (error) {
+      console.error('[IPC] Failed to show restore dialog:', error);
+      return null;
+    }
+  });
+
+  /**
+   * Handler: file:validateExists
+   * Validates that a file path exists and is readable
+   * Params: filePath (string)
+   * Returns: Promise<boolean>
+   */
+  ipcMain.handle('file:validateExists', async (_event, filePath: string): Promise<boolean> => {
+    try {
+      return validateFileExists(filePath);
+    } catch (error) {
+      console.error('[IPC] Failed to validate file exists:', error);
+      return false;
     }
   });
 
