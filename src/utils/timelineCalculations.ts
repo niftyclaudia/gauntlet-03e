@@ -120,7 +120,7 @@ export function calculateAutoFitZoom(
   if (naturalWidth > availableWidth) {
     // Content is longer than viewport - zoom out to fit
     const calculatedZoom = availableWidth / naturalWidth;
-    // Clamp between 0.1 and 1.0 (only zoom out, never zoom in)
+    // Clamp between 0.1 (10%) and 1.0 (100%) - matches TimelineZoomControls MIN_ZOOM
     return Math.max(0.1, Math.min(1.0, calculatedZoom));
   } else {
     // Content is shorter than viewport - keep at 100% zoom (natural size)

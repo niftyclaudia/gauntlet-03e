@@ -117,3 +117,31 @@ export interface SequenceItem {
   endTime: number;
 }
 
+/**
+ * Saved project state (auto-save format)
+ * Serialized to JSON for persistence
+ */
+export interface SavedProjectState {
+  /** Version number for future compatibility (e.g., "1.0") */
+  version: string;
+  /** ISO 8601 timestamp when state was saved */
+  timestamp: string;
+  /** Array of imported video clips (file paths, not video data) */
+  library: VideoClip[];
+  /** Timeline clips with trim points and order */
+  timeline: TimelineClip[];
+  /** Currently selected clip ID (null if none) */
+  selectedClipId: string | null;
+  /** Current playhead position in seconds */
+  currentPlayheadPosition: number;
+  /** Timeline zoom level (1.0 to 10.0) */
+  timelineZoom: number;
+  /** Timeline horizontal scroll position in pixels */
+  timelineScrollPosition: number;
+}
+
+/**
+ * Project version constant for auto-save compatibility
+ */
+export const PROJECT_VERSION = '1.0';
+

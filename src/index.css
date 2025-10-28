@@ -37,6 +37,40 @@ body {
   flex-direction: column;
   width: 100%;
   height: 100%;
+  position: relative;
+}
+
+/* Auto-save status bar (top of app, below native title bar) */
+.autosave-status-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 22px;
+  background-color: #1a1a1a; /* Match app background */
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  z-index: 100;
+  pointer-events: none; /* Don't block clicks */
+  border-bottom: 1px solid #333333; /* Subtle separator */
+  animation: autosaveStatusFadeIn 0.2s ease-out;
+}
+
+@keyframes autosaveStatusFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.autosave-status-text {
+  color: #999999; /* Slightly muted, like CapCut */
+  font-weight: 400;
 }
 
 /* Top Section: Library + Preview */
@@ -44,6 +78,7 @@ body {
   display: flex;
   flex: 1; /* Takes remaining space after timeline */
   overflow: hidden;
+  /* margin-top will be added dynamically when status bar is visible */
 }
 
 /* Library Panel - Left, 20% width */
@@ -600,7 +635,7 @@ body {
 .timeline-clip-thumbnail {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* Background image properties set inline in TimelineClipCard for tiling */
 }
 
 .timeline-clip-thumbnail-placeholder {
@@ -740,51 +775,120 @@ body {
 .timeline-zoom-controls {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
+}
+
+.timeline-zoom-fit-button,
+.timeline-zoom-out-button,
+.timeline-zoom-in-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 4px;
+  background-color: #2a2a2a;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+  padding: 0;
+}
+
+.timeline-zoom-fit-button:hover:not(:disabled),
+.timeline-zoom-out-button:hover:not(:disabled),
+.timeline-zoom-in-button:hover:not(:disabled) {
+  background-color: #3a3a3a;
+}
+
+.timeline-zoom-fit-button:active:not(:disabled),
+.timeline-zoom-out-button:active:not(:disabled),
+.timeline-zoom-in-button:active:not(:disabled) {
+  background-color: #4a4a4a;
+}
+
+.timeline-zoom-fit-button:disabled,
+.timeline-zoom-out-button:disabled,
+.timeline-zoom-in-button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.timeline-zoom-fit-button svg,
+.timeline-zoom-out-button svg,
+.timeline-zoom-in-button svg {
+  flex-shrink: 0;
 }
 
 .timeline-zoom-slider {
-  width: 200px;
+  width: 120px;
   height: 4px;
   border-radius: 2px;
-  background-color: #333333;
   outline: none;
   cursor: pointer;
+  margin: 0 4px;
+  -webkit-appearance: none;
+  appearance: none;
+  --slider-progress: 0%;
+}
+
+.timeline-zoom-slider::-webkit-slider-runnable-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #ffffff var(--slider-progress), #333333 var(--slider-progress));
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .timeline-zoom-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
   appearance: none;
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background-color: #0066cc;
+  background-color: #ffffff;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  border: 1px solid #333333;
+  margin-top: -4px;
 }
 
 .timeline-zoom-slider::-webkit-slider-thumb:hover {
-  background-color: #0052a3;
+  background-color: #e0e0e0;
+  transform: scale(1.1);
+}
+
+.timeline-zoom-slider::-webkit-slider-thumb:active {
+  background-color: #cccccc;
+  transform: scale(1.15);
+}
+
+.timeline-zoom-slider::-moz-range-track {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, #ffffff var(--slider-progress), #333333 var(--slider-progress));
 }
 
 .timeline-zoom-slider::-moz-range-thumb {
   width: 12px;
   height: 12px;
   border-radius: 50%;
-  background-color: #0066cc;
+  background-color: #ffffff;
   cursor: pointer;
-  border: none;
-  transition: background-color 0.2s ease;
+  border: 1px solid #333333;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
 .timeline-zoom-slider::-moz-range-thumb:hover {
-  background-color: #0052a3;
+  background-color: #e0e0e0;
+  transform: scale(1.1);
 }
 
-.timeline-zoom-indicator {
-  font-size: 12px;
-  font-weight: 500;
-  color: #ffffff;
-  min-width: 50px;
+.timeline-zoom-slider::-moz-range-thumb:active {
+  background-color: #cccccc;
+  transform: scale(1.15);
 }
 
 /* Empty State Styling */

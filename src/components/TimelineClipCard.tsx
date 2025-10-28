@@ -31,6 +31,9 @@ interface TimelineClipCardProps {
 /** Base height for timeline clips at 100% zoom */
 const BASE_CLIP_HEIGHT = 80;
 
+/** Thumbnail width for tiling (16:9 aspect ratio at BASE_CLIP_HEIGHT) */
+const THUMBNAIL_WIDTH = Math.round(BASE_CLIP_HEIGHT * (16 / 9)); // ~142px
+
 const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
   clip,
   libraryClip,
@@ -96,15 +99,17 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
         }}
       >
         {thumbnailDataUrl ? (
-          <img
-            src={thumbnailDataUrl}
-            alt={libraryClip.filename}
+          <div
             className="timeline-clip-thumbnail"
             style={{
               width: '100%',
               height: '100%',
-              objectFit: 'cover',
+              backgroundImage: `url(${thumbnailDataUrl})`,
+              backgroundSize: `${THUMBNAIL_WIDTH}px 100%`,
+              backgroundRepeat: 'repeat-x',
+              backgroundPosition: 'left center',
             }}
+            aria-label={libraryClip.filename}
           />
         ) : (
           <div className="timeline-clip-thumbnail-placeholder">Loading...</div>

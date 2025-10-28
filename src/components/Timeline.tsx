@@ -548,7 +548,13 @@ const Timeline: React.FC<TimelineProps> = ({
 
       {/* Zoom controls */}
       <div className="timeline-footer">
-        <TimelineZoomControls zoom={timelineZoom} onZoomChange={onZoomChange} />
+        <TimelineZoomControls
+          zoom={timelineZoom}
+          onZoomChange={onZoomChange}
+          timeline={timeline}
+          library={library}
+          timelineContainerRef={timelineContainerRef}
+        />
       </div>
     </div>
   );

@@ -65,4 +65,56 @@ contextBridge.exposeInMainWorld('electron', {
   getPathForFile: (file: File): string => {
     return webUtils.getPathForFile(file);
   },
+
+  /**
+   * Saves project state to autosave.json file
+   * @param state - SavedProjectState object to save
+   * @returns Promise<void>
+   * @throws Error if file write fails
+   */
+  saveProject: (state: any): Promise<void> => {
+    return ipcRenderer.invoke('autosave:save', state);
+  },
+
+  /**
+   * Loads project state from autosave.json file
+   * @returns Promise<SavedProjectState | null> - state if file exists and is valid, null otherwise
+   */
+  loadProject: (): Promise<any | null> => {
+    return ipcRenderer.invoke('autosave:load');
+  },
+
+  /**
+   * Deletes autosave.json file
+   * @returns Promise<void>
+   */
+  deleteAutosave: (): Promise<void> => {
+    return ipcRenderer.invoke('autosave:delete');
+  },
+
+  /**
+   * Gets autosave file age in milliseconds
+   * @returns Promise<number | null> - age in milliseconds, or null if file doesn't exist
+   */
+  getAutosaveAge: (): Promise<number | null> => {
+    return ipcRenderer.invoke('autosave:getAge');
+  },
+
+  /**
+   * Shows restore dialog asking user to restore session
+   * @param timestamp - ISO timestamp string to display
+   * @returns Promise<'restore' | 'fresh' | null> - user choice or null if cancelled
+   */
+  showRestoreDialog: (timestamp: string): Promise<'restore' | 'fresh' | null> => {
+    return ipcRenderer.invoke('autosave:showRestoreDialog', timestamp);
+  },
+
+  /**
+   * Validates that a file path exists and is readable
+   * @param filePath - Absolute path to file
+   * @returns Promise<boolean> - true if file exists and is readable
+   */
+  validateFileExists: (filePath: string): Promise<boolean> => {
+    return ipcRenderer.invoke('file:validateExists', filePath);
+  },
 });
