@@ -39,6 +39,18 @@ const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect }) => 
     }
   };
 
+  const handleDragStart = (e: React.DragEvent) => {
+    e.dataTransfer.effectAllowed = 'copy';
+    e.dataTransfer.setData('application/library-clip-id', clip.id);
+    // Set opacity for dragging feedback
+    e.currentTarget.style.opacity = '0.5';
+  };
+
+  const handleDragEnd = (e: React.DragEvent) => {
+    // Restore opacity
+    e.currentTarget.style.opacity = '1';
+  };
+
   // Format duration as MM:SS
   const durationDisplay = formatDuration(clip.duration);
 
@@ -51,6 +63,9 @@ const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect }) => 
     <div 
       className="library-clip-card"
       onClick={handleClick}
+      draggable
+      onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
       title={clip.filename} // Show full filename on hover
     >
       <div className="clip-thumbnail-container">
