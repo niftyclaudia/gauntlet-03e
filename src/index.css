@@ -635,7 +635,7 @@ body {
 .timeline-clip-thumbnail {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* Background image properties set inline in TimelineClipCard for tiling */
 }
 
 .timeline-clip-thumbnail-placeholder {
