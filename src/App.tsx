@@ -251,6 +251,7 @@ const App: React.FC = () => {
           onPlayheadChange={setCurrentPlayheadPosition}
           isPlaying={isPlaying}
           onPlayingChange={setIsPlaying}
+          onSelectClip={handleTimelineSelectClip}
         />
       </div>
       <Timeline

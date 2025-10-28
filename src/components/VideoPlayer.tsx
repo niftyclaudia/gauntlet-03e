@@ -31,6 +31,8 @@ interface VideoPlayerProps {
   isPlaying: boolean;
   /** Callback when playback state changes */
   onPlayingChange: (playing: boolean) => void;
+  /** Callback when clip selection should change (for timeline clicks) */
+  onSelectClip?: (clipId: string | null) => void;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -41,6 +43,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onPlayheadChange,
   isPlaying,
   onPlayingChange,
+  onSelectClip,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playerState, setPlayerState] = useState<{
@@ -69,6 +72,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const lastPlayheadPositionRef = useRef(0); // Track last playhead position for detecting user seeks
   const lastPlayheadUpdateTimeRef = useRef(0); // Throttle playhead updates (timestamp)
   const sequenceStartTimeRef = useRef(0); // Track when sequence started (for calculating elapsed time)
+  const lastPlayheadChangeTimeRef = useRef(0); // Track timing of playhead changes for detecting drag
+  const isUserDraggingRef = useRef(false); // Track if user is actively dragging playhead
   const isPlayingRef = useRef(isPlaying); // Keep ref in sync for keyboard handler
   const playerStateRef = useRef(playerState); // Keep ref in sync for keyboard handler
   const currentPlayheadPositionRef = useRef(currentPlayheadPosition); // Keep ref in sync for keyboard handler
@@ -312,28 +317,59 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         const currentSrc = videoRef.current.src || '';
         const needsReload = !currentSrc.includes(encodeURI(clip.path));
         
-        if (needsReload) {
-          console.log('[VideoPlayer] Setting video src:', videoSrc);
-          videoRef.current.src = videoSrc;
-          
-          // Set initial time for timeline clips
-          if (isTimelineClip && playerState.currentTimelineClip) {
-            videoRef.current.currentTime = playerState.currentTimelineClip.trimStart;
+        // Calculate target time for timeline clips
+        let targetVideoTime = 0;
+        if (isTimelineClip && playerState.currentTimelineClip) {
+          // If we have a sequence time (from clicking on timeline), calculate the correct local time
+          if (sequenceTime > 0 && sequence.length > 0 && currentSequenceIndex >= 0) {
+            const currentSequenceItem = sequence[currentSequenceIndex];
+            if (currentSequenceItem && currentSequenceItem.clip.id === playerState.currentTimelineClip.id) {
+              // This clip matches the sequence item, use sequence time to calculate local time
+              targetVideoTime = getLocalTimeInClip(currentSequenceItem, sequenceTime);
+              targetVideoTime = Math.max(
+                currentSequenceItem.clip.trimStart,
+                Math.min(targetVideoTime, currentSequenceItem.clip.trimEnd)
+              );
+            } else {
+              // Fallback to trimStart
+              targetVideoTime = playerState.currentTimelineClip.trimStart;
+            }
           } else {
-            videoRef.current.currentTime = 0;
+            // Use trimStart as default
+            targetVideoTime = playerState.currentTimelineClip.trimStart;
           }
+        }
+        
+        if (needsReload) {
+          console.log('[VideoPlayer] Setting video src:', videoSrc, 'at time:', targetVideoTime);
+          videoRef.current.src = videoSrc;
+          videoRef.current.currentTime = targetVideoTime;
           
           // Force load only if we changed the source
           videoRef.current.load();
+          
+          // Mark loading as complete once metadata is loaded
+          const handleCanPlayOnce = () => {
+            setPlayerState(prev => ({ ...prev, isLoading: false }));
+            videoRef.current?.removeEventListener('canplay', handleCanPlayOnce);
+          };
+          videoRef.current.addEventListener('canplay', handleCanPlayOnce);
+          
+          // Also check if already ready
+          if (videoRef.current.readyState >= 2) {
+            setPlayerState(prev => ({ ...prev, isLoading: false }));
+          }
         } else {
           // Video already loaded, just update time if needed (e.g., after timeline click seek)
-          if (isTimelineClip && playerState.currentTimelineClip) {
-            const targetTime = playerState.currentTimelineClip.trimStart;
-            const currentTime = videoRef.current.currentTime || 0;
-            // Only seek if difference is significant (avoid micro-adjustments)
-            if (Math.abs(currentTime - targetTime) > 0.1) {
-              videoRef.current.currentTime = targetTime;
-            }
+          const currentTime = videoRef.current.currentTime || 0;
+          // Only seek if difference is significant (avoid micro-adjustments)
+          if (Math.abs(currentTime - targetVideoTime) > 0.1) {
+            console.log('[VideoPlayer] Seeking to time:', targetVideoTime);
+            videoRef.current.currentTime = targetVideoTime;
+            setPlayerState(prev => ({ ...prev, isLoading: false }));
+          } else {
+            // No seek needed, just mark as not loading
+            setPlayerState(prev => ({ ...prev, isLoading: false }));
           }
         }
       };
@@ -380,14 +416,130 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     // Small changes (< 0.5s) are likely from playback, larger changes are user seeks  
     const previousPlayhead = lastPlayheadPositionRef.current;
     const playheadDelta = Math.abs(currentPlayheadPosition - previousPlayhead);
+    const now = Date.now();
+    const timeSinceLastChange = lastPlayheadChangeTimeRef.current > 0 ? now - lastPlayheadChangeTimeRef.current : 1000;
+    
+    // Detect user interaction:
+    // 1. Large jump (> 0.5s) = click or large drag
+    // 2. Rapid updates (< 150ms between changes) = dragging (even small changes during drag)
+    // 3. Already detected as dragging = continue treating as drag
     const isUserSeek = playheadDelta > 0.5;
+    const isDragging = isUserDraggingRef.current || (timeSinceLastChange < 150 && playheadDelta > 0.01); // Rapid small changes = dragging
+    // Update dragging ref - if rapid changes, we're dragging
+    isUserDraggingRef.current = timeSinceLastChange < 150 && playheadDelta > 0.01;
+    // After 200ms of no changes, clear dragging flag
+    if (timeSinceLastChange > 200) {
+      isUserDraggingRef.current = false;
+    }
+    
+    // Get current playback mode early (needed for calculations below)
+    const currentMode = playerState.playbackMode;
+    
+    // When timeline has clips and there's any playhead change > 0.1s, treat as user interaction
+    // Exception: Don't treat as user interaction if we're in sequence mode playing (automatic playback updates)
+    // OR if the change is from video playback updating timeline playhead (handled separately)
+    const isPlaybackUpdate = currentMode === 'timeline' && isPlaying && playheadDelta < 0.2;
+    const isUserInteraction = isUserSeek || isDragging || 
+                             (timeline.length > 0 && playheadDelta > 0.1 && 
+                              !isSequenceModeRef.current && !isPlaybackUpdate);
+    
+    // Update timestamp for next check
+    lastPlayheadChangeTimeRef.current = now;
     
     // If this is a restore (significant jump from 0), always seek
     const isRestoreSeek = wasRestoredRef.current && previousPlayhead === 0 && currentPlayheadPosition > 0;
+    
+    // IMPORTANT: When user clicks/drags timeline playhead, always show timeline preview
+    // Even if a library clip is currently selected/playing, timeline interaction takes priority
+    // This allows users to preview timeline position while library clip is selected
+    if (timeline.length > 0 && isUserInteraction && currentPlayheadPosition >= 0) {
+      // Calculate or get sequence to find which clip contains this position
+      let seqToUse = sequence;
+      if (seqToUse.length === 0) {
+        seqToUse = calculateSequence(timeline, library);
+        setSequence(seqToUse);
+      }
+      
+      if (seqToUse.length > 0) {
+        const clipIndex = findCurrentClipInSequence(seqToUse, currentPlayheadPosition);
+        if (clipIndex >= 0 && clipIndex < seqToUse.length) {
+          const targetItem = seqToUse[clipIndex];
+          const localTime = getLocalTimeInClip(targetItem, currentPlayheadPosition);
+          const clampedLocalTime = Math.max(
+            targetItem.clip.trimStart,
+            Math.min(localTime, targetItem.clip.trimEnd)
+          );
+          
+          // Load the clip at this position for preview
+          // Check if we need to switch clips (avoid unnecessary reloads during drag)
+          const needsClipSwitch = !playerState.currentTimelineClip || 
+                                  playerState.currentTimelineClip.id !== targetItem.clip.id;
+          
+          // If dragging within the same clip, just seek (optimized for smooth dragging)
+          if (isDragging && !needsClipSwitch && videoRef.current && playerState.currentTimelineClip && 
+              playerState.playbackMode === 'timeline') {
+            // We're dragging within the same clip - just seek to the correct time
+            isExternalSeekRef.current = true;
+            videoRef.current.currentTime = clampedLocalTime;
+            setPlayerState(prev => ({ ...prev, currentTime: currentPlayheadPosition }));
+            setTimeout(() => {
+              isExternalSeekRef.current = false;
+            }, 50);
+            lastPlayheadPositionRef.current = currentPlayheadPosition;
+            return;
+          }
+          
+          // If we get here, we need to switch clips (different clip or initial load)
+          // OR we're coming from library mode and need to load timeline clip
+          
+          // Load the correct clip at this position
+          console.log('[VideoPlayer] Timeline click/drag - loading clip', clipIndex, 'at time', clampedLocalTime, isDragging ? '(dragging)' : '(click)');
+          setCurrentSequenceIndex(clipIndex);
+          setSequenceTime(currentPlayheadPosition);
+          setPlayerState(prev => ({
+            ...prev,
+            currentVideo: targetItem.libraryClip,
+            currentTimelineClip: targetItem.clip,
+            playbackMode: 'timeline',
+            duration: targetItem.endTime - targetItem.startTime,
+            currentTime: currentPlayheadPosition,
+            isLoading: true,
+          }));
+          
+          // Select the timeline clip so spacebar works correctly (deselects any library clip)
+          if (onSelectClip && !isDragging) {
+            // Only change selection on click, not during drag (avoid rapid state changes)
+            onSelectClip(targetItem.clip.id);
+          }
+          
+          // If playing (library clip was playing), pause it since we're now showing timeline preview
+          if (isPlaying && !isExternalSeekRef.current && !isDragging) {
+            // Don't pause during drag, only on initial click
+            videoRef.current.pause();
+            onPlayingChange(false);
+            setPlayerState(prev => ({ ...prev, isPlaying: false }));
+          }
+          
+          // Video source will be updated by the effect watching currentVideo
+          lastPlayheadPositionRef.current = currentPlayheadPosition;
+          return;
+        }
+      }
+    }
+
+    // If in library mode and user hasn't clicked timeline, ignore timeline playhead changes
+    // Library clips are independent - don't sync timeline playhead to them during playback
+    if (currentMode === 'library' && !isUserSeek) {
+      // Library clips are independent - don't sync timeline playhead to them
+      // Just update the ref so we don't trigger false positives later
+      lastPlayheadPositionRef.current = currentPlayheadPosition;
+      return;
+    }
 
     // If it's a user seek (clicking on timeline) and we're playing, pause playback
     // Don't pause if this is from video playback (handled by handleTimeUpdate)
-    if (isUserSeek && isPlaying && !isExternalSeekRef.current) {
+    // Only for timeline/sequence modes, not library mode (library mode handled above)
+    if (isUserSeek && isPlaying && !isExternalSeekRef.current && currentMode !== 'library') {
       console.log('[VideoPlayer] User seek detected (delta:', playheadDelta.toFixed(2), 's), pausing playback at:', currentPlayheadPosition);
       videoRef.current.pause();
       onPlayingChange(false);
@@ -457,51 +609,43 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return;
     }
 
-    // IMPORTANT: Don't sync timeline playhead changes to library clips!
-    // Library clips are independent - only sync for timeline clips
-    const currentMode = playerState.playbackMode;
-    if (currentMode === 'library') {
-      // Library clips are independent - don't sync timeline playhead to them
-      // Timeline playhead changes should not affect library clip playback
-      lastPlayheadPositionRef.current = currentPlayheadPosition;
-      return;
-    }
+    // Library mode with no user seek already handled at top (non-user seeks ignored)
+    // From here on, we only handle timeline/sequence modes or user seeks
 
-    // Only sync for timeline clips (not library clips)
-    // Check if the difference is significant (avoid micro-adjustments)
-    const videoTime = videoRef.current.currentTime || 0;
-    const diff = Math.abs(currentPlayheadPosition - videoTime);
+    // Only sync for timeline clips (not library clips) that are already loaded
+    // BUT only if user hasn't interacted (if user interacted, we already handled it above)
+    // This handles playback updates during timeline clip playback (not user seeks)
+    if (!isUserInteraction && currentMode === 'timeline' && playerState.currentTimelineClip) {
+      // This is a playback update, not user interaction
+      // Check if the difference is significant (avoid micro-adjustments)
+      const trimStart = playerState.currentTimelineClip.trimStart;
+      const expectedVideoTime = trimStart + currentPlayheadPosition;
+      const videoTime = videoRef.current.currentTime || 0;
+      const diff = Math.abs(expectedVideoTime - videoTime);
 
-    // If difference is > 0.1 seconds, it's likely an external seek
-    // OR if this is a restore, always seek (even if video just loaded)
-    if (diff > 0.1 || isRestoreSeek) {
-      isExternalSeekRef.current = true;
-
-      if (currentMode === 'timeline' && playerState.currentTimelineClip) {
-        // For timeline clips, convert playhead position to video time
-        const trimStart = playerState.currentTimelineClip.trimStart;
-        const videoTime = trimStart + currentPlayheadPosition;
-        const clampedTime = Math.max(trimStart, Math.min(videoTime, playerState.currentTimelineClip.trimEnd));
+      // Only sync if difference is > 0.1 seconds and it's not from external seek
+      if (diff > 0.1 && !isExternalSeekRef.current) {
+        const clampedTime = Math.max(trimStart, Math.min(expectedVideoTime, playerState.currentTimelineClip.trimEnd));
         
-        console.log('[VideoPlayer] Syncing playhead to video:', {
+        console.log('[VideoPlayer] Syncing playhead to video (playback update):', {
           playheadPosition: currentPlayheadPosition,
           videoTime: clampedTime,
-          isRestore: isRestoreSeek,
           previousPlayhead: previousPlayhead
         });
         
+        isExternalSeekRef.current = true;
         videoRef.current.currentTime = clampedTime;
+        
+        // Reset flag after a short delay
+        setTimeout(() => {
+          isExternalSeekRef.current = false;
+        }, 100);
       }
-
-      // Reset flag after a short delay
-      setTimeout(() => {
-        isExternalSeekRef.current = false;
-      }, 100);
     }
     
     // Update last playhead position after handling single clip mode
     lastPlayheadPositionRef.current = currentPlayheadPosition;
-  }, [currentPlayheadPosition, playerState.playbackMode, playerState.duration, playerState.currentTimelineClip, isPlaying, sequence, currentSequenceIndex]);
+  }, [currentPlayheadPosition, playerState, isPlaying, sequence, currentSequenceIndex, timeline, library, onPlayheadChange, onSelectClip]);
 
   /**
    * Handle video metadata loaded
@@ -818,9 +962,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       videoRef.current.currentTime = finalTime;
       onPlayheadChange(clampedTime);
     } else {
-      // For library clips, seek directly
+      // For library clips, seek directly but DON'T update timeline playhead
+      // Library clips are independent - timeline playhead should not move when seeking library clip
       videoRef.current.currentTime = clampedTime;
-      onPlayheadChange(clampedTime);
+      // Do NOT call onPlayheadChange for library clips - they're independent
     }
 
     setPlayerState(prev => ({
@@ -833,21 +978,33 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
    * Start sequence preview
    */
   const handleSequencePreview = useCallback(() => {
-    if (sequence.length === 0) {
-      console.warn('[VideoPlayer] Cannot preview sequence - timeline is empty');
+    // Recalculate sequence if empty (may happen if ref is stale)
+    let seqToUse = sequence;
+    if (seqToUse.length === 0 && timeline.length > 0) {
+      console.log('[VideoPlayer] Sequence empty, recalculating from timeline');
+      seqToUse = calculateSequence(timeline, library);
+      // Update sequence state for future use
+      setSequence(seqToUse);
+    }
+    
+    if (seqToUse.length === 0) {
+      console.warn('[VideoPlayer] Cannot preview sequence - timeline is empty or clips missing library references');
       return;
     }
 
+    // Use recalculated sequence
+    const finalSequence = seqToUse;
+    
     // Start from current playhead position (or beginning if at 0)
     const startSequenceTime = Math.max(0, currentPlayheadPosition);
     
     // Find which clip corresponds to the current playhead position
-    let startClipIndex = findCurrentClipInSequence(sequence, startSequenceTime);
+    let startClipIndex = findCurrentClipInSequence(finalSequence, startSequenceTime);
     if (startClipIndex < 0) {
       startClipIndex = 0; // Default to first clip if not found
     }
 
-    const startItem = sequence[startClipIndex];
+    const startItem = finalSequence[startClipIndex];
 
     isSequenceModeRef.current = true;
     setCurrentSequenceIndex(startClipIndex);
@@ -861,7 +1018,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       currentVideo: startItem.libraryClip,
       currentTimelineClip: startItem.clip,
       playbackMode: 'sequence',
-      duration: calculateSequenceDuration(sequence),
+      duration: calculateSequenceDuration(finalSequence),
       currentTime: startSequenceTime,
       isLoading: true,
       error: null,
@@ -870,7 +1027,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     // Will auto-play when video loads (handled in canplay event)
     onPlayingChange(true);
     setPlayerState(prev => ({ ...prev, isPlaying: true }));
-  }, [sequence, currentPlayheadPosition, onPlayingChange, library]);
+  }, [sequence, currentPlayheadPosition, onPlayingChange, library, timeline]);
 
   /**
    * Keyboard shortcuts (Spacebar for play/pause)
@@ -913,23 +1070,45 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                                 !currentPlayerState.currentTimelineClip && 
                                 !isSequenceModeRef.current;
           
+          // PRIORITY 0: If a timeline clip is currently loaded (user clicked on playhead), start sequence preview
+          // This takes highest priority - if user clicked on timeline, they want to play from there
+          if (currentPlayerState.currentTimelineClip && timeline.length > 0 && !isSequenceModeRef.current) {
+            const currentSequence = sequenceRef.current;
+            let seqToUse = currentSequence;
+            if (seqToUse.length === 0) {
+              seqToUse = calculateSequence(timeline, library);
+            }
+            
+            if (seqToUse.length > 0) {
+              console.log('[VideoPlayer] Starting sequence preview via spacebar (timeline clip loaded from playhead click)');
+              handleSequencePreview();
+              return;
+            }
+          }
+          
           // PRIORITY 1: If we have timeline clips but sequence mode is not active, start sequence preview
           // This is the default behavior: timeline clips ready → spacebar starts sequence
           // Only if we're NOT in library mode (library mode takes priority)
           const currentSequence = sequenceRef.current;
           console.log('[VideoPlayer] Debug - timeline:', timeline.length, 'sequence:', currentSequence.length, 'isSequenceMode:', isSequenceModeRef.current, 'isLibraryMode:', isLibraryMode);
-          if (timeline.length > 0 && !isSequenceModeRef.current && currentSequence.length > 0 && !isLibraryMode) {
-            console.log('[VideoPlayer] Starting sequence preview via spacebar (timeline has clips, no library clip selected)');
-            handleSequencePreview();
-            return;
-          }
           
-          // If sequence is empty but timeline has clips, sequence might not be calculated yet
-          // Try to calculate it now
-          if (timeline.length > 0 && currentSequence.length === 0 && !isLibraryMode) {
-            console.log('[VideoPlayer] Sequence empty but timeline has clips, calculating sequence...');
-            // Sequence will be calculated in useEffect, but we can trigger it by checking again
-            // Actually, sequence should already be calculated. This might be a timing issue.
+          // If timeline has clips, try to start sequence preview (even if sequence ref is stale)
+          // Calculate sequence on-the-fly if needed
+          if (timeline.length > 0 && !isSequenceModeRef.current && !isLibraryMode) {
+            // Ensure sequence is calculated (may be empty due to stale ref)
+            let seqToUse = currentSequence;
+            if (seqToUse.length === 0) {
+              // Calculate sequence synchronously for this check
+              seqToUse = calculateSequence(timeline, library);
+            }
+            
+            if (seqToUse.length > 0) {
+              console.log('[VideoPlayer] Starting sequence preview via spacebar (timeline has clips, no library clip selected)');
+              handleSequencePreview();
+              return;
+            } else {
+              console.log('[VideoPlayer] Cannot start sequence - timeline clips missing library references');
+            }
           }
           
           // PRIORITY 2: If we're in library mode, just play/pause the library clip, don't start sequence
@@ -954,15 +1133,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           }
           
           // PRIORITY 3: For all other cases, need videoRef
-          // If we reach here, we should have a video loaded
+          // If we reach here and no video element, cannot proceed
           if (!videoRef.current) {
             console.log('[VideoPlayer] No video element available, cannot play');
-            // Try starting sequence if timeline has clips (fallback)
-            const currentSequence = sequenceRef.current;
-            if (timeline.length > 0 && !isSequenceModeRef.current && currentSequence.length > 0) {
-              console.log('[VideoPlayer] Fallback: Starting sequence preview (no video element)');
-              handleSequencePreview();
-            }
             return;
           }
           
