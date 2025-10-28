@@ -332,98 +332,98 @@ interface ElectronAPI {
 
 ### Happy Path
 
-- [ ] **Drag-and-Drop Import** (single MP4 file)
+- [x] **Drag-and-Drop Import** (single MP4 file)
   - Gate: Library highlights with dashed border while dragging
   - Gate: Clip card appears within 3 seconds with correct thumbnail, filename, duration (MM:SS format)
 
-- [ ] **Multiple File Import** (3 MP4s via drag-and-drop)
+- [x] **Multiple File Import** (3 MP4s via drag-and-drop)
   - Gate: Progress shows "Importing 1 of 3...", "2 of 3...", "3 of 3..."
   - Gate: All 3 clip cards appear, sorted by import order
 
-- [ ] **File Picker Import**
+- [x] **File Picker Import**
   - Gate: "Import Videos" button opens native picker filtered to .mp4/.mov
   - Gate: Multi-select works, all selected files import successfully
 
-- [ ] **Metadata & Thumbnails** (1080p H.264 MP4)
+- [x] **Metadata & Thumbnails** (1080p H.264 MP4)
   - Gate: Metadata extracted in < 2 seconds, thumbnail in < 1 second
   - Gate: Duration formatted correctly (e.g., "02:15" for 135s), thumbnail shows first frame
 
 ### Edge Cases
 
-- [ ] **Unsupported Format** (.avi file)
+- [x] **Unsupported Format** (.avi file)
   - Gate: Error toast "Unsupported format", no clip added, app stable
 
-- [ ] **Large File** (1.5GB MP4)
+- [x] **Large File** (1.5GB MP4)
   - Gate: Yellow warning toast, import proceeds successfully
 
-- [ ] **File Too Large** (5GB MP4)
+- [x] **File Too Large** (5GB MP4)
   - Gate: Red error toast, import blocked
 
-- [ ] **Corrupted File**
+- [x] **Corrupted File**
   - Gate: Red error toast "Could not read [filename]", app doesn't crash
 
-- [ ] **Empty Library**
+- [x] **Empty Library**
   - Gate: Shows "Drag & drop video files or click Import to get started"
 
 ### Visual/UI Verification
 
-- [ ] **Clip Cards** (5 videos)
+- [x] **Clip Cards** (5 videos)
   - Gate: Thumbnails 160x90px (16:9), filenames truncated with ellipsis, durations MM:SS with dark overlay
 
-- [ ] **Library Scrolling** (15 clips)
+- [x] **Library Scrolling** (15 clips)
   - Gate: Scrolls smoothly at 60fps, scrollbar appears automatically
 
-- [ ] **Loading States** (2GB file)
+- [x] **Loading States** (2GB file)
   - Gate: Spinner + filename immediate, "Processing large file..." after 3s, smooth fade-in on complete
 
 ### Performance (from prd-v1.md)
 
-- [ ] **Import Speed** (1080p H.264 MP4, 500MB, 2min)
+- [x] **Import Speed** (1080p H.264 MP4, 500MB, 2min)
   - Gate: Metadata < 2s, thumbnail < 1s, total < 3s
 
-- [ ] **Responsiveness** (3 files importing)
+- [x] **Responsiveness** (3 files importing)
   - Gate: UI non-blocking (buttons clickable, scrolling works)
 
-- [ ] **Memory** (10 clips, ~5GB source files)
+- [x] **Memory** (10 clips, ~5GB source files)
   - Gate: App memory < 1GB, stable over 15min
 
-- [ ] **Scrolling** (10+ clips)
+- [x] **Scrolling** (10+ clips)
   - Gate: 60fps, no stuttering
 
 ### FFmpeg Integration
 
-- [ ] **Metadata Parsing** (H.264 MP4, 1920x1080, 30fps)
+- [x] **Metadata Parsing** (H.264 MP4, 1920x1080, 30fps)
   - Gate: Width, height, framerate, codec all parsed correctly, duration accurate to 0.1s
 
-- [ ] **Thumbnail Quality**
+- [x] **Thumbnail Quality**
   - Gate: Clear image, 16:9 aspect ratio, 320x180px, < 50KB file size
 
-- [ ] **Mixed Formats** (MP4 and MOV)
+- [x] **Mixed Formats** (MP4 and MOV)
   - Gate: Both process successfully with metadata and thumbnails
 
 ---
 
 ## 13. Definition of Done
 
-- [ ] Electron IPC handlers implemented (`selectFiles`, `getMetadata`, `getThumbnail`)
-- [ ] FFmpeg integration working (metadata extraction + thumbnail generation)
-- [ ] Drag-and-drop import functional with visual feedback
-- [ ] File picker import functional with format filtering
-- [ ] Library component displays all imported clips with thumbnails
-- [ ] Clip cards show thumbnail, filename, duration correctly formatted
-- [ ] Empty state displayed when no clips imported
-- [ ] Loading states shown during import operations
-- [ ] Error handling for unsupported formats, large files, corrupted files
-- [ ] File size validation (warn 1GB+, block 4GB+)
-- [ ] Temp directory created for thumbnails
-- [ ] All acceptance gates pass (Section 12)
-- [ ] No console errors or warnings
-- [ ] TypeScript compiles without errors
-- [ ] Performance targets met (< 2s metadata, < 1s thumbnail, < 1GB memory)
-- [ ] Manual testing with real MP4 and MOV files completed
-- [ ] Cross-platform testing on macOS completed
-- [ ] Code follows .cursorrules TypeScript/React/Electron patterns
-- [ ] Documentation: README updated with import instructions
+- [x] Electron IPC handlers implemented (`selectFiles`, `getMetadata`, `getThumbnail`)
+- [x] FFmpeg integration working (metadata extraction + thumbnail generation)
+- [x] Drag-and-drop import functional with visual feedback
+- [x] File picker import functional with format filtering
+- [x] Library component displays all imported clips with thumbnails
+- [x] Clip cards show thumbnail, filename, duration correctly formatted
+- [x] Empty state displayed when no clips imported
+- [x] Loading states shown during import operations
+- [x] Error handling for unsupported formats, large files, corrupted files
+- [x] File size validation (warn 1GB+, block 4GB+)
+- [x] Temp directory created for thumbnails
+- [x] All acceptance gates pass (Section 12)
+- [x] No console errors or warnings
+- [x] TypeScript compiles without errors
+- [x] Performance targets met (< 2s metadata, < 1s thumbnail, < 1GB memory)
+- [x] Manual testing with real MP4 and MOV files completed
+- [x] Cross-platform testing on macOS completed
+- [x] Code follows .cursorrules TypeScript/React/Electron patterns
+- [x] Documentation: README updated with import instructions
 
 ---
 
