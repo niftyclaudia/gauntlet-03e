@@ -91,6 +91,27 @@ export interface ElectronAPI {
    * @returns Promise<boolean> - true if file exists and is readable
    */
   validateFileExists: (filePath: string) => Promise<boolean>;
+
+  /**
+   * Trims a timeline clip by validating and committing trim values
+   */
+  trim: {
+    /**
+     * Validates and returns trim values for a timeline clip
+     * @param clipId - UUID of timeline clip to trim
+     * @param inPoint - Trim start point in seconds (trimStart)
+     * @param outPoint - Trim end point in seconds (trimEnd)
+     * @param clipDuration - Source clip duration in seconds (for validation)
+     * @returns Promise with validated trim values
+     * @throws Error if validation fails
+     */
+    trimClip: (
+      clipId: string,
+      inPoint: number,
+      outPoint: number,
+      clipDuration: number
+    ) => Promise<{ success: boolean; inPoint: number; outPoint: number }>;
+  };
 }
 
 declare global {

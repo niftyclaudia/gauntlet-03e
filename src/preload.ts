@@ -117,4 +117,24 @@ contextBridge.exposeInMainWorld('electron', {
   validateFileExists: (filePath: string): Promise<boolean> => {
     return ipcRenderer.invoke('file:validateExists', filePath);
   },
+
+  /**
+   * Trims a timeline clip by validating and committing trim values
+   * @param clipId - UUID of timeline clip to trim
+   * @param inPoint - Trim start point in seconds (trimStart)
+   * @param outPoint - Trim end point in seconds (trimEnd)
+   * @param clipDuration - Source clip duration in seconds (for validation)
+   * @returns Promise<{ success: boolean; inPoint: number; outPoint: number }>
+   * @throws Error if validation fails
+   */
+  trim: {
+    trimClip: (
+      clipId: string,
+      inPoint: number,
+      outPoint: number,
+      clipDuration: number
+    ): Promise<{ success: boolean; inPoint: number; outPoint: number }> => {
+      return ipcRenderer.invoke('trim:trimClip', clipId, inPoint, outPoint, clipDuration);
+    },
+  },
 });

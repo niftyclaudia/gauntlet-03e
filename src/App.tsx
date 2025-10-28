@@ -109,6 +109,25 @@ const App: React.FC = () => {
   };
 
   /**
+   * Handle trim update - called after trim operation completes via IPC
+   */
+  const handleTrimUpdate = (clipId: string, trimStart: number, trimEnd: number) => {
+    setTimeline(prev => {
+      return prev.map(clip => {
+        if (clip.id === clipId) {
+          console.log(`[App] Updated trim for clip ${clipId}: trimStart=${trimStart.toFixed(2)}s, trimEnd=${trimEnd.toFixed(2)}s`);
+          return {
+            ...clip,
+            trimStart,
+            trimEnd,
+          };
+        }
+        return clip;
+      });
+    });
+  };
+
+  /**
    * Handle restoring state from autosave
    * Called by useSessionRestore hook when user chooses to restore
    */
@@ -249,6 +268,7 @@ const App: React.FC = () => {
         onZoomChange={setTimelineZoom}
         onScrollChange={setTimelineScrollPosition}
         onPlayheadChange={setCurrentPlayheadPosition}
+        onTrimUpdate={handleTrimUpdate}
       />
     </div>
   );

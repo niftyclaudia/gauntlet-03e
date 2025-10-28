@@ -660,20 +660,37 @@ body {
   border-radius: 2px;
 }
 
-/* Trim Handles (visual only, non-functional for PR-3) */
+/* Trim Handles */
 .timeline-clip-trim-handle {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 4px;
   background-color: rgba(0, 102, 204, 0.5);
-  cursor: ew-resize;
+  cursor: default;
   opacity: 0;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.2s ease, width 0.2s ease, background-color 0.2s ease;
+  z-index: 10;
 }
 
 .timeline-clip-card:hover .timeline-clip-trim-handle {
   opacity: 0.5;
+}
+
+/* Hover state for trim handles */
+.trim-handle-hovered {
+  opacity: 1 !important;
+  width: 6px;
+  background-color: rgba(0, 102, 204, 0.8);
+  cursor: ew-resize;
+}
+
+/* Dragging state for trim handles */
+.trim-handle-dragging {
+  opacity: 1 !important;
+  width: 6px;
+  background-color: rgba(0, 102, 204, 1);
+  cursor: grabbing !important;
 }
 
 .timeline-clip-trim-handle-left {
@@ -686,6 +703,66 @@ body {
   right: 0;
   border-top-right-radius: 2px;
   border-bottom-right-radius: 2px;
+}
+
+/* Trim Tooltip */
+.trim-tooltip {
+  pointer-events: none;
+  user-select: none;
+}
+
+.trim-tooltip-content {
+  background-color: rgba(30, 30, 30, 0.95);
+  border: 1px solid #666666;
+  border-radius: 4px;
+  padding: 8px 12px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.5);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 120px;
+}
+
+.trim-tooltip-label {
+  font-size: 11px;
+  color: #999999;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.trim-tooltip-durations {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.trim-tooltip-original {
+  color: #ffffff;
+}
+
+.trim-tooltip-arrow {
+  color: #999999;
+  font-weight: 300;
+}
+
+.trim-tooltip-new {
+  font-weight: 600;
+}
+
+.trim-tooltip-positive {
+  color: #4CAF50; /* Green for expanding */
+}
+
+.trim-tooltip-negative {
+  color: #FF6B6B; /* Red for shrinking */
+}
+
+.trim-tooltip-change {
+  font-size: 11px;
+  font-weight: 500;
+  margin-top: 2px;
 }
 
 .timeline-clip-filename {
