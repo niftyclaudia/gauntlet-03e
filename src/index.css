@@ -1,8 +1,114 @@
+/**
+ * ollo Video Editor Styles
+ * Dark theme with three-panel layout per prd-v1.md
+ */
+
+/* CSS Reset and Base Styles */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html,
 body {
-  font-family:
-    -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial,
-    sans-serif;
-  margin: auto;
-  max-width: 38rem;
-  padding: 2rem;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', 'Segoe UI', Roboto,
+    Helvetica, Arial, sans-serif;
+  background-color: #1a1a1a; /* Dark theme background */
+  color: #ffffff; /* White text */
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+#root {
+  width: 100%;
+  height: 100%;
+}
+
+/* Main App Container */
+.app-container {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+}
+
+/* Top Section: Library + Preview */
+.main-content {
+  display: flex;
+  flex: 1; /* Takes remaining space after timeline */
+  overflow: hidden;
+}
+
+/* Library Panel - Left, 20% width */
+.library-panel {
+  width: 20%;
+  min-width: 200px;
+  background-color: #1a1a1a;
+  border-right: 1px solid #333333;
+  padding: 16px;
+  overflow-y: auto;
+}
+
+/* Preview Panel - Center, takes remaining space (~40%) */
+.preview-panel {
+  flex: 1;
+  background-color: #1a1a1a;
+  border-right: 1px solid #333333;
+  padding: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+}
+
+/* Timeline Panel - Bottom, 30% height */
+.timeline-panel {
+  height: 30%;
+  min-height: 150px;
+  background-color: #1a1a1a;
+  border-top: 1px solid #333333;
+  padding: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+/* Empty State Styling */
+.empty-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  text-align: center;
+}
+
+.empty-state p {
+  color: #999999; /* Gray text for placeholders */
+  font-size: 14px;
+  line-height: 1.6;
+  max-width: 300px;
+}
+
+/* Preview Placeholder */
+.preview-placeholder {
+  width: 100%;
+  max-width: 640px;
+  aspect-ratio: 16 / 9;
+  background-color: #333333; /* Gray placeholder background */
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.video-icon {
+  font-size: 64px;
+  color: #666666;
+  opacity: 0.5;
 }
