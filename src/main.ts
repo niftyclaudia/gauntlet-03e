@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+import { registerIpcHandlers } from './main/ipcHandlers';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -45,7 +46,17 @@ const createWindow = () => {
 };
 
 // Create window when Electron is ready
-app.on('ready', createWindow);
+app.on('ready', () => {
+  console.log('[Main] App ready, registering IPC handlers...');
+  // Register IPC handlers before creating window
+  try {
+    registerIpcHandlers();
+    console.log('[Main] IPC handlers registered successfully');
+  } catch (error) {
+    console.error('[Main] Failed to register IPC handlers:', error);
+  }
+  createWindow();
+});
 
 // Quit when all windows are closed, except on macOS
 // On macOS, apps stay active until explicitly quit with Cmd + Q
