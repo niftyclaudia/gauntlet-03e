@@ -12,8 +12,83 @@ import { VideoMetadata, TimelineClip, VideoClip, ExportSettings, ExportParams } 
 import { getThumbnailDirectory } from './fileSystem';
 
 // Import ffmpeg-static with require for better compatibility
+// In packaged app, this module is available from node_modules (unpacked from asar)
 const ffmpegStatic = require('ffmpeg-static');
-const ffmpegPath = ffmpegStatic.replace('app.asar', 'app.asar.unpacked');
+// Get the path property (ffmpeg-static exports the path directly or via .path property)
+const ffmpegStaticPath = typeof ffmpegStatic === 'string' ? ffmpegStatic : ffmpegStatic.path || ffmpegStatic;
+
+// Resolve FFmpeg path for both dev and packaged environments
+let ffmpegPath: string | null = null;
+
+console.log('[FFmpeg] Initializing FFmpeg path resolution...');
+console.log('[FFmpeg] ffmpeg-static module:', ffmpegStatic);
+console.log('[FFmpeg] ffmpeg-static path:', ffmpegStaticPath);
+
+if (ffmpegStaticPath) {
+  // In packaged app, ffmpeg-static will return a path that may contain 'app.asar'
+  // We need to adjust it to point to 'app.asar.unpacked' where the binary should be unpacked
+  // Also handle dev mode where path is directly to node_modules
+  
+  // Check if we're in a packaged app (path contains app.asar)
+  if (ffmpegStaticPath.includes('app.asar')) {
+    // Try unpacked location first (where executable binaries should be)
+    const unpackedPath = ffmpegStaticPath.replace('app.asar', 'app.asar.unpacked');
+    
+    // Also try alternative: if path is like .../app.asar/node_modules/..., 
+    // unpacked might be at .../app.asar.unpacked/node_modules/...
+    const altUnpackedPath = ffmpegStaticPath.replace(/app\.asar(.+)/, 'app.asar.unpacked$1');
+    
+    console.log('[FFmpeg] Checking paths:', {
+      original: ffmpegStaticPath,
+      unpacked: unpackedPath,
+      altUnpacked: altUnpackedPath
+    });
+    
+    // Try unpacked paths first
+    if (fs.existsSync(unpackedPath)) {
+      ffmpegPath = unpackedPath;
+      console.log('[FFmpeg] Found FFmpeg in unpacked location:', ffmpegPath);
+    } else if (fs.existsSync(altUnpackedPath)) {
+      ffmpegPath = altUnpackedPath;
+      console.log('[FFmpeg] Found FFmpeg in alternative unpacked location:', ffmpegPath);
+    } else {
+      // Fallback to asar path (might not be executable on macOS, but let's try)
+      console.warn('[FFmpeg] Unpacked binary not found, using asar path (may fail on macOS):', ffmpegStaticPath);
+      ffmpegPath = ffmpegStaticPath;
+    }
+  } else {
+    // Dev mode - path is directly to node_modules
+    if (fs.existsSync(ffmpegStaticPath)) {
+      ffmpegPath = ffmpegStaticPath;
+      console.log('[FFmpeg] Using FFmpeg in dev mode:', ffmpegPath);
+    } else {
+      console.error('[FFmpeg] FFmpeg binary not found at:', ffmpegStaticPath);
+      ffmpegPath = null;
+    }
+  }
+  
+  // Final validation
+  if (ffmpegPath && !fs.existsSync(ffmpegPath)) {
+    console.error('[FFmpeg] FFmpeg path resolved but file does not exist:', ffmpegPath);
+    ffmpegPath = null;
+  }
+} else {
+  console.error('[FFmpeg] ffmpeg-static module did not return a valid path');
+}
+
+console.log('[FFmpeg] Final FFmpeg path:', ffmpegPath);
+if (ffmpegPath) {
+  try {
+    const stats = fs.statSync(ffmpegPath);
+    console.log('[FFmpeg] FFmpeg binary stats:', {
+      size: stats.size,
+      isFile: stats.isFile(),
+      mode: stats.mode.toString(8)
+    });
+  } catch (error) {
+    console.error('[FFmpeg] Error getting FFmpeg binary stats:', error);
+  }
+}
 
 /**
  * Extract video metadata using FFmpeg
@@ -41,12 +116,17 @@ export function extractMetadata(filePath: string): Promise<VideoMetadata> {
 
     ffmpeg.on('close', (code) => {
       try {
+        // Log FFmpeg output for debugging
+        console.log('[FFmpeg] Process exited with code:', code);
+        console.log('[FFmpeg] stderr output:', stderr);
+        
         // FFmpeg returns non-zero exit code when using -i without output
         // This is expected behavior, we just need to parse stderr
         
         // Extract duration (format: Duration: HH:MM:SS.ms)
         const durationMatch = stderr.match(/Duration: (\d{2}):(\d{2}):(\d{2}\.\d{2})/);
         if (!durationMatch) {
+          console.error('[FFmpeg] No duration found in output. Full stderr:', stderr);
           reject(new Error('Could not extract duration from video file'));
           return;
         }

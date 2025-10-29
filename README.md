@@ -97,6 +97,72 @@ Output: `out/make/` directory with distributable files
 
 ---
 
+## Using the Packaged Native App
+
+Once you've built the application, you can run it as a standalone macOS application.
+
+### Building the App
+
+1. Build the distributable:
+   ```bash
+   npm run make
+   ```
+
+2. The built app will be located at:
+   ```
+   out/make/zip/darwin/arm64/ollo-darwin-arm64-1.0.0.zip
+   ```
+   (or `x64` for Intel Macs)
+
+### Installing & Launching
+
+1. **Extract the ZIP file:**
+   - Double-click the ZIP file to extract it
+   - This creates an `ollo.app` bundle
+
+2. **Move to Applications (optional):**
+   - Drag `ollo.app` to your Applications folder for easy access
+
+3. **Launch the app:**
+   - Double-click `ollo.app` in Finder, or
+   - Open from Terminal: `open ollo.app`
+   - First launch may take a few seconds (< 5 seconds)
+
+4. **Allow app permissions (first launch):**
+   - macOS may prompt for permission to access files/folders
+   - Grant permissions when prompted to enable video import/export
+
+### Using the App
+
+Once launched, the app functions identically to development mode:
+
+- **Import videos**: Drag & drop MP4/MOV files into the library panel, or use File → Import
+- **Edit timeline**: Drag clips from library to timeline, reorder by dragging, trim using handles
+- **Preview**: Use playback controls to preview your sequence
+- **Export**: Click Export button, choose output location, wait for processing
+
+**Supported formats:**
+- **Import**: MP4, MOV files
+- **Export**: MP4 files (compatible with QuickTime, VLC, and other players)
+
+### Troubleshooting
+
+**App won't launch:**
+- Ensure you're on macOS 10.15 (Catalina) or higher
+- Check Console.app for error messages
+- Try launching from Terminal: `open ollo.app`
+
+**Video import/export fails:**
+- Verify file permissions are granted
+- Check that video files are valid MP4/MOV format
+- Ensure you have sufficient disk space for exports
+
+**FFmpeg errors:**
+- The FFmpeg binary is bundled with the app
+- If errors occur, check Console.app for detailed error messages
+
+---
+
 ## Tech Stack
 
 - **Electron**: Desktop application framework
@@ -124,11 +190,62 @@ Output: `out/make/` directory with distributable files
 - Window configuration (1200x800px, minimum 1280x720px)
 - React + TypeScript foundation
 
-**Upcoming**:
-- PR #2: Video Import & Library Management
-- PR #3: Timeline Editing
-- PR #4: Video Playback
-- PR #5: Video Export
+**Phase 2 - PR #2**: Video Import & Library Management ✅
+- Drag & drop video import (MP4, MOV)
+- File picker integration
+- Video metadata extraction via FFmpeg
+- Thumbnail generation
+- Library panel with clip cards
+- Error handling and validation
+
+**Phase 3 - PR #3**: Timeline Editing ✅
+- Drag clips from library to timeline
+- Timeline reordering via drag & drop
+- Timeline zoom controls (2% to 1000%)
+- Playhead positioning
+- Clip selection and highlighting
+
+**Phase 4 - PR #4**: Video Playback ✅
+- HTML5 video player integration
+- Playback controls (play/pause, seek)
+- Timeline synchronization
+- Sequence preview mode
+- Keyboard shortcuts (spacebar, arrow keys)
+
+**Phase 5 - PR #5**: Auto-save & Session Recovery ✅
+- Automatic project state saving (every 30 seconds)
+- Session restore on app restart
+- Graceful error handling for corrupted saves
+
+**Phase 6 - PR #6**: Video Trimming ✅
+- Trim handles on timeline clips
+- Real-time trim preview
+- Trim data persistence
+- Visual trim indicators
+
+**Phase 7 - PR #7**: Sequence Preview ✅
+- Full timeline sequence playback
+- Multi-clip preview with transitions
+- Sequence timing calculations
+- Preview controls
+
+**Phase 8 - PR #8**: Video Export ✅
+- FFmpeg-based video export pipeline
+- Progress tracking and UI
+- Export dialog with success/error states
+- File format validation and processing
+
+**Phase 9 - PR #9**: Error States & Polish ✅
+- Toast notifications with auto-dismiss
+- Library clip deletion with confirmation
+- Improved error handling and user feedback
+- Countdown timers for notifications
+
+**Phase 10 - PR #10**: Build & Package ✅
+- macOS app bundle creation
+- FFmpeg binary bundling
+- Standalone application distribution
+- Performance optimization for packaged app
 
 ---
 
