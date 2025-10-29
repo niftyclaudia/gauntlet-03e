@@ -158,9 +158,12 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
     }
   };
 
+  // Determine if any trim handle is hovered or being dragged
+  const hasTrimHandleActive = hoveredEdge !== null || isTrimming;
+
   return (
     <div
-      className={`timeline-clip-card ${isSelected ? 'timeline-clip-selected' : ''}`}
+      className={`timeline-clip-card ${isSelected ? 'timeline-clip-selected' : ''} ${hasTrimHandleActive ? 'timeline-clip-trimming' : ''}`}
       style={{
         width: `${clipWidth}px`,
         minWidth: '50px', // Minimum width for visibility

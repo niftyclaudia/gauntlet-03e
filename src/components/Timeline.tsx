@@ -609,6 +609,10 @@ const Timeline: React.FC<TimelineProps> = ({
             // Check if this clip is being trimmed and calculate adjusted position
             const isThisClipTrimming = trimDrag.dragging?.clipId === clip.id;
             const isLeftHandleDragging = isThisClipTrimming && trimDrag.dragging?.edge === 'left';
+            // Check if this clip's trim handle is hovered
+            const isThisClipHovered = hoveredEdge?.clipId === clip.id;
+            // Raise z-index if trimming or hovered to prevent other clips from blocking trim handles
+            const shouldRaiseZIndex = isThisClipTrimming || isThisClipHovered;
             
             // Calculate base clip position (from cumulative widths of previous clips)
             let clipPosition = calculateClipPosition(index, sortedTimeline, library, timelineZoom);
@@ -672,6 +676,8 @@ const Timeline: React.FC<TimelineProps> = ({
                     position: 'absolute',
                     left: `${clipPosition}px`,
                     top: '20px',
+                    pointerEvents: 'auto', // Ensure wrapper doesn't block interactions
+                    zIndex: shouldRaiseZIndex ? 100 : 1, // Raise when trimming/hovered to prevent blocking
                   }}
                   onDragOver={(e) => {
                     if (isReordering) {

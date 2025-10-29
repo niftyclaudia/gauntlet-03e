@@ -606,12 +606,17 @@ body {
   border-radius: 4px;
   padding: 4px;
   cursor: move;
-  transition: border-color 0.2s ease, transform 0.1s ease;
+  transition: border-color 0.2s ease, transform 0.1s ease, z-index 0s;
   border: 2px solid transparent;
   user-select: none;
   pointer-events: auto; /* Ensure clips are interactive */
   position: relative;
   z-index: 1; /* Below playhead */
+}
+
+/* Raise clip z-index when trim handle is hovered to prevent other clips from blocking it */
+.timeline-clip-card.timeline-clip-trimming {
+  z-index: 100; /* Above other clips when trimming */
 }
 
 .timeline-clip-card:hover {
@@ -670,7 +675,8 @@ body {
   cursor: default;
   opacity: 0;
   transition: opacity 0.2s ease, width 0.2s ease, background-color 0.2s ease;
-  z-index: 10;
+  z-index: 101; /* High z-index to ensure handles are always clickable */
+  pointer-events: auto; /* Ensure handles are always interactive */
 }
 
 .timeline-clip-card:hover .timeline-clip-trim-handle {
