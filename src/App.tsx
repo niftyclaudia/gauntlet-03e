@@ -7,15 +7,21 @@
  * - Timeline (bottom, 30% height): Timeline editing interface
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Library from './components/Library';
 import VideoPlayer from './components/VideoPlayer';
 import Timeline from './components/Timeline';
+import RecordScreenButton from './components/RecordScreenButton';
+import RecordScreenDialog from './components/RecordScreenDialog';
+import RecordingIndicator from './components/RecordingIndicator';
+import RecordingPermissionDialog from './components/RecordingPermissionDialog';
 import { VideoClip, TimelineClip } from './types/video';
 import { addClipToTimeline, reorderTimelineClip, removeClipFromTimeline } from './utils/timelineOperations';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useSessionRestore } from './hooks/useSessionRestore';
+import { useScreenRecording } from './hooks/useScreenRecording';
 import { serializeProjectState } from './utils/projectStateUtils';
+import { v4 as uuidv4 } from 'uuid';
 
 const App: React.FC = () => {
   // Library state
@@ -30,6 +36,21 @@ const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isExporting, setIsExporting] = useState<boolean>(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+
+  // Recording state
+  const [showRecordDialog, setShowRecordDialog] = useState<boolean>(false);
+  const [showPermissionDialog, setShowPermissionDialog] = useState<boolean>(false);
+  const [recordingSessionId, setRecordingSessionId] = useState<string | null>(null);
+  const [recordingScreenSourceId, setRecordingScreenSourceId] = useState<string | null>(null);
+  const [recordingAudioEnabled, setRecordingAudioEnabled] = useState<boolean>(false);
+  const [recordingAudioDeviceId, setRecordingAudioDeviceId] = useState<string>('default');
+  const [recordingElapsedSeconds, setRecordingElapsedSeconds] = useState<number>(0);
+  const [recordingAudioLevel, setRecordingAudioLevel] = useState<number>(0);
+  const [recordingOutputPath, setRecordingOutputPath] = useState<string | null>(null);
+  const [isProcessingRecording, setIsProcessingRecording] = useState<boolean>(false);
+  
+  // Recording hook (simplified - will wire up properly)
+  const recordingRef = useRef({ isRecording: false, elapsedSeconds: 0, error: null });
 
   /**
    * Handle completion of video import
@@ -254,6 +275,247 @@ const App: React.FC = () => {
     onRestore: handleRestoreState,
   });
 
+  // Recording handlers
+  const handleOpenRecordDialog = useCallback(() => {
+    setShowRecordDialog(true);
+  }, []);
+
+  const handleStartRecording = useCallback(async (screenId: string, audioEnabled: boolean, audioDeviceId?: string) => {
+    setShowRecordDialog(false);
+    
+    try {
+      // Create recording session via IPC (this creates the session and temp file path)
+      const result = await window.electron.recording.startRecording(screenId, audioEnabled);
+      if (result.success && result.sessionId) {
+        setRecordingSessionId(result.sessionId);
+        setRecordingScreenSourceId(screenId);
+        setRecordingAudioEnabled(audioEnabled);
+        if (audioDeviceId) setRecordingAudioDeviceId(audioDeviceId);
+        
+        // Start MediaRecorder recording in renderer
+        console.log('[App] Recording session created, starting MediaRecorder...');
+        
+        try {
+          // Get screen stream using Electron's getUserMedia
+          const screenStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              // @ts-ignore - Electron-specific constraint
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: screenId,
+              },
+            } as any,
+          });
+
+          // Get audio stream if enabled
+          let combinedStream = screenStream;
+          if (audioEnabled) {
+            try {
+              const audioConstraints: MediaStreamConstraints = {
+                audio: audioDeviceId !== 'default' 
+                  ? { deviceId: { exact: audioDeviceId } }
+                  : true,
+                video: false,
+              };
+              const audioStream = await navigator.mediaDevices.getUserMedia(audioConstraints);
+              audioStream.getAudioTracks().forEach(track => {
+                combinedStream.addTrack(track);
+              });
+            } catch (audioError) {
+              console.warn('[App] Failed to get audio stream:', audioError);
+              // Continue with video-only recording
+            }
+          }
+
+          // Create MediaRecorder
+          const mimeType = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+            ? 'video/webm;codecs=vp9'
+            : 'video/webm';
+
+          const mediaRecorder = new MediaRecorder(combinedStream, {
+            mimeType,
+            videoBitsPerSecond: 2500000,
+          });
+
+          const chunks: Blob[] = [];
+          let isStopping = false; // Prevent double-stop
+          
+          mediaRecorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+              chunks.push(event.data);
+            }
+          };
+
+          mediaRecorder.onstop = async () => {
+            if (isStopping) {
+              console.log('[App] MediaRecorder onstop already called, ignoring duplicate');
+              return;
+            }
+            isStopping = true;
+
+            console.log('[App] MediaRecorder onstop triggered');
+
+            try {
+              const blob = new Blob(chunks, { type: mimeType });
+              const arrayBuffer = await blob.arrayBuffer();
+              
+              console.log(`[App] Recording stopped, writing ${arrayBuffer.byteLength} bytes...`);
+              
+              // Write to temp file via IPC (main process has access to Buffer)
+              const writeResult = await window.electron.recording.writeRecordingFile(result.sessionId, arrayBuffer);
+              
+              if (!writeResult.success) {
+                throw new Error(writeResult.error || 'Failed to write recording file');
+              }
+              
+              console.log('[App] Recording file written, starting conversion...');
+              
+              // Now trigger the conversion via IPC
+              const stopResult = await window.electron.recording.stopRecording(result.sessionId);
+              if (stopResult.success) {
+                console.log('[App] Recording converted successfully');
+              } else {
+                console.error('[App] Failed to convert recording:', stopResult.error);
+                alert(`Failed to convert recording: ${stopResult.error}`);
+              }
+            } catch (writeError) {
+              console.error('[App] Failed to write recording file:', writeError);
+              alert(`Failed to save recording: ${writeError instanceof Error ? writeError.message : 'Unknown error'}`);
+            } finally {
+              // Reset stopping flag
+              (window as any).isRecordingStopping = false;
+            }
+          };
+
+          mediaRecorder.onerror = (event: any) => {
+            console.error('[App] MediaRecorder error:', event.error);
+            alert(`Recording error: ${event.error?.message || 'Unknown error'}`);
+          };
+
+          // Start recording
+          mediaRecorder.start(100);
+          console.log('[App] MediaRecorder started');
+          
+          // Store MediaRecorder reference and session info for stopping
+          (window as any).currentMediaRecorder = mediaRecorder;
+          (window as any).currentRecordingSessionId = result.sessionId;
+          (window as any).isRecordingStopping = false;
+          
+        } catch (streamError) {
+          console.error('[App] Failed to get media stream:', streamError);
+          alert(`Failed to access screen: ${streamError instanceof Error ? streamError.message : 'Unknown error'}`);
+        }
+      } else {
+        alert(`Failed to start recording: ${result.error || 'Unknown error'}`);
+      }
+    } catch (err) {
+      console.error('[App] Failed to start recording:', err);
+      alert(`Failed to start recording: ${err instanceof Error ? err.message : 'Unknown error'}`);
+    }
+  }, []);
+
+  const handleStopRecording = useCallback(async () => {
+    if (!recordingSessionId) {
+      console.log('[App] No recording session to stop');
+      return;
+    }
+    
+    // Prevent double-stop
+    if ((window as any).isRecordingStopping) {
+      console.log('[App] Recording stop already in progress');
+      return;
+    }
+    (window as any).isRecordingStopping = true;
+    
+    console.log('[App] Stopping recording...');
+    
+    // Stop MediaRecorder first
+    const mediaRecorder = (window as any).currentMediaRecorder;
+    if (mediaRecorder) {
+      console.log('[App] MediaRecorder state:', mediaRecorder.state);
+      
+      if (mediaRecorder.state === 'recording') {
+        console.log('[App] Stopping MediaRecorder...');
+        try {
+          mediaRecorder.stop();
+          console.log('[App] MediaRecorder.stop() called');
+        } catch (err) {
+          console.error('[App] Error stopping MediaRecorder:', err);
+          (window as any).isRecordingStopping = false;
+          return;
+        }
+      } else {
+        console.log('[App] MediaRecorder not recording, state:', mediaRecorder.state);
+        (window as any).isRecordingStopping = false;
+      }
+    } else {
+      console.log('[App] No MediaRecorder found');
+      (window as any).isRecordingStopping = false;
+    }
+    
+    // Note: The conversion will be triggered by the MediaRecorder onstop handler
+  }, [recordingSessionId]);
+
+  // IPC event listeners for recording
+  useEffect(() => {
+    const cleanupElapsed = window.electron.recording.onElapsedTime((data) => {
+      if (data.sessionId === recordingSessionId) {
+        setRecordingElapsedSeconds(data.seconds);
+      }
+    });
+
+    const cleanupComplete = window.electron.recording.onComplete(async (data) => {
+      if (data.sessionId === recordingSessionId) {
+        setIsProcessingRecording(false);
+        
+        // Add recorded clip to library
+        try {
+          const clipId = uuidv4();
+          const metadata = await window.electron.getMetadata(data.filePath);
+          const thumbnailPath = await window.electron.getThumbnail(data.filePath, clipId);
+          
+          const now = Date.now();
+          const dateStr = new Date(now).toLocaleString();
+          const newClip: VideoClip = {
+            id: clipId,
+            path: data.filePath,
+            filename: `Screen Recording - ${dateStr}.mp4`,
+            duration: data.duration,
+            thumbnail: thumbnailPath,
+            metadata,
+            importedAt: now,
+            source: 'recording',
+            recordedAt: now,
+          };
+          
+          setLibrary(prev => [newClip, ...prev]);
+          setRecordingSessionId(null);
+          setRecordingScreenSourceId(null);
+          setRecordingOutputPath(null);
+          alert('Recording saved to Library!');
+        } catch (err) {
+          console.error('[App] Failed to add recording to library:', err);
+          alert('Failed to process recording. File saved but not added to library.');
+        }
+      }
+    });
+
+    const cleanupError = window.electron.recording.onError((data) => {
+      if (data.sessionId === recordingSessionId) {
+        alert(`Recording error: ${data.message}`);
+        setRecordingSessionId(null);
+        setIsProcessingRecording(false);
+      }
+    });
+
+    return () => {
+      cleanupElapsed();
+      cleanupComplete();
+      cleanupError();
+    };
+  }, [recordingSessionId]);
+
   return (
     <div className="app-container">
       {/* Auto-save status bar (top of app, below title bar) */}
@@ -280,8 +542,45 @@ const App: React.FC = () => {
           onPlayingChange={setIsPlaying}
           onSelectClip={handleTimelineSelectClip}
           onBeforeExport={handleBeforeExport}
+          onOpenRecordDialog={handleOpenRecordDialog}
+          isRecording={!!recordingSessionId}
+          isProcessingRecording={isProcessingRecording}
         />
+        {recordingSessionId && (
+          <RecordingIndicator
+            elapsedSeconds={recordingElapsedSeconds}
+            audioLevel={recordingAudioLevel}
+            audioEnabled={recordingAudioEnabled}
+            onStop={handleStopRecording}
+          />
+        )}
       </div>
+      
+      
+      {/* Recording Dialogs */}
+      <RecordScreenDialog
+        isOpen={showRecordDialog}
+        onClose={() => setShowRecordDialog(false)}
+        onStartRecording={handleStartRecording}
+      />
+      <RecordingPermissionDialog
+        isOpen={showPermissionDialog}
+        onContinueWithoutAudio={() => {
+          setShowPermissionDialog(false);
+          // Continue with video-only recording
+        }}
+        onCancel={() => {
+          setShowPermissionDialog(false);
+          setShowRecordDialog(true);
+        }}
+      />
+      
+      {isProcessingRecording && (
+        <div className="processing-overlay">
+          <div className="processing-spinner"></div>
+          <p>Processing recording...</p>
+        </div>
+      )}
       <Timeline
         timeline={timeline}
         library={library}
