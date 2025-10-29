@@ -86,9 +86,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const currentPlayheadPositionRef = useRef(currentPlayheadPosition); // Keep ref in sync for keyboard handler
   const sequenceRef = useRef(sequence); // Keep ref in sync for keyboard handler
   const currentSequenceIndexRef = useRef(currentSequenceIndex); // Keep ref in sync for keyboard handler
+  const timelineRef = useRef(timeline); // Keep ref in sync for keyboard handler
+  const libraryRef = useRef(library); // Keep ref in sync for keyboard handler
 
   // Export hook for export functionality
   const exportHook = useExport();
+  const isExportingRef = useRef(exportHook.isExporting); // Keep ref in sync for keyboard handler
   const [showExportDialog, setShowExportDialog] = useState(false);
   const wasExportingRef = useRef(false); // Track previous exporting state to detect completion
 
@@ -1174,12 +1177,36 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [sequence, currentPlayheadPosition, onPlayingChange, library, timeline]);
 
   /**
-   * Keyboard shortcuts (Spacebar for play/pause)
+   * Keyboard shortcuts (Spacebar for play/pause, Cmd+E for export)
    */
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Only handle if no input is focused
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) {
+        return;
+      }
+
+      // Cmd+E (or Ctrl+E on Windows) for export
+      if ((e.metaKey || e.ctrlKey) && (e.key === 'e' || e.key === 'E')) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        // Only allow export if timeline has clips and not currently exporting
+        const currentTimeline = timelineRef.current;
+        const currentIsExporting = isExportingRef.current;
+        
+        if (currentTimeline.length === 0) {
+          console.log('[VideoPlayer] Cmd+E pressed but timeline is empty');
+          return;
+        }
+        
+        if (currentIsExporting) {
+          console.log('[VideoPlayer] Cmd+E pressed but export already in progress');
+          return;
+        }
+        
+        console.log('[VideoPlayer] Cmd+E pressed, starting export');
+        handleExportClick();
         return;
       }
 
@@ -1396,7 +1423,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     window.addEventListener('keydown', handleKeyDown, true); // Use capture phase to catch early
     return () => window.removeEventListener('keydown', handleKeyDown, true);
-  }, [onPlayingChange, timeline, handleSequencePreview]); // Include timeline and handleSequencePreview
+  }, [onPlayingChange, timeline, handleSequencePreview, handleExportClick]); // Include handleExportClick for export shortcut
 
   /**
    * Keep refs in sync with state for keyboard handler
@@ -1420,6 +1447,18 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   useEffect(() => {
     currentSequenceIndexRef.current = currentSequenceIndex;
   }, [currentSequenceIndex]);
+
+  useEffect(() => {
+    isExportingRef.current = exportHook.isExporting;
+  }, [exportHook.isExporting]);
+
+  useEffect(() => {
+    timelineRef.current = timeline;
+  }, [timeline]);
+
+  useEffect(() => {
+    libraryRef.current = library;
+  }, [library]);
 
   /**
    * Sync isPlaying state with video element
