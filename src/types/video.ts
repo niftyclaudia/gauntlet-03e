@@ -145,3 +145,41 @@ export interface SavedProjectState {
  */
 export const PROJECT_VERSION = '1.0';
 
+/**
+ * Export settings (fixed preset per PRD)
+ */
+export interface ExportSettings {
+  /** Output format (always "mp4" for MVP) */
+  format: 'mp4';
+  /** Video codec (always "libx264" for MVP) */
+  videoCodec: 'libx264';
+  /** Audio codec (always "aac" for MVP) */
+  audioCodec: 'aac';
+  /** Output frame rate (always 30 for MVP) */
+  framerate: 30;
+  /** Target resolution width (calculated from sources, max 1920) */
+  width: number;
+  /** Target resolution height (calculated from sources, max 1080) */
+  height: number;
+  /** Video bitrate in Mbps (always ~5 for MVP) */
+  videoBitrate: number;
+  /** Audio bitrate in kbps (always 128 for MVP) */
+  audioBitrate: 128;
+  /** Aspect ratio mode: 'letterbox' (matches first clip) */
+  aspectRatioMode: 'letterbox';
+}
+
+/**
+ * Export parameters for video export pipeline
+ */
+export interface ExportParams {
+  /** Timeline clips to export (sorted by order) */
+  clips: TimelineClip[];
+  /** Library clips map (for accessing source file paths) */
+  libraryClips: VideoClip[];
+  /** Output file path (absolute path) */
+  outputPath: string;
+  /** Export settings (fixed preset) */
+  settings: ExportSettings;
+}
+

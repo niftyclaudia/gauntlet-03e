@@ -606,12 +606,17 @@ body {
   border-radius: 4px;
   padding: 4px;
   cursor: move;
-  transition: border-color 0.2s ease, transform 0.1s ease;
+  transition: border-color 0.2s ease, transform 0.1s ease, z-index 0s;
   border: 2px solid transparent;
   user-select: none;
   pointer-events: auto; /* Ensure clips are interactive */
   position: relative;
   z-index: 1; /* Below playhead */
+}
+
+/* Raise clip z-index when trim handle is hovered to prevent other clips from blocking it */
+.timeline-clip-card.timeline-clip-trimming {
+  z-index: 100; /* Above other clips when trimming */
 }
 
 .timeline-clip-card:hover {
@@ -670,7 +675,8 @@ body {
   cursor: default;
   opacity: 0;
   transition: opacity 0.2s ease, width 0.2s ease, background-color 0.2s ease;
-  z-index: 10;
+  z-index: 101; /* High z-index to ensure handles are always clickable */
+  pointer-events: auto; /* Ensure handles are always interactive */
 }
 
 .timeline-clip-card:hover .timeline-clip-trim-handle {
@@ -1000,4 +1006,152 @@ body {
   font-size: 64px;
   color: #666666;
   opacity: 0.5;
+}
+
+/* Export Components */
+.export-button {
+  background-color: #0066cc;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.export-button:hover:not(:disabled) {
+  background-color: #0052a3;
+}
+
+.export-button:disabled {
+  background-color: #333333;
+  color: #666666;
+  cursor: not-allowed;
+}
+
+.export-progress-container {
+  padding: 12px 16px;
+  background-color: #1a1a1a;
+  border-radius: 6px;
+  margin-top: 12px;
+}
+
+.export-progress-bar-wrapper {
+  width: 100%;
+  height: 8px;
+  background-color: #333333;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.export-progress-bar {
+  height: 100%;
+  background-color: #0066cc;
+  transition: width 0.3s ease;
+}
+
+.export-progress-bar-error {
+  background-color: #cc0000;
+}
+
+.export-progress-text {
+  font-size: 12px;
+  color: #cccccc;
+  text-align: center;
+}
+
+.export-progress-error {
+  color: #ff6666;
+}
+
+.export-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.export-dialog {
+  background-color: #1a1a1a;
+  border-radius: 8px;
+  padding: 24px;
+  min-width: 400px;
+  max-width: 600px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+}
+
+.export-dialog-header {
+  margin-bottom: 16px;
+}
+
+.export-dialog-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.export-dialog-content {
+  margin-bottom: 24px;
+}
+
+.export-dialog-content p {
+  margin: 8px 0;
+  font-size: 14px;
+  color: #cccccc;
+  line-height: 1.5;
+}
+
+.export-dialog-path {
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 12px;
+  color: #999999;
+  word-break: break-all;
+  background-color: #2a2a2a;
+  padding: 8px;
+  border-radius: 4px;
+}
+
+.export-dialog-error {
+  color: #ff6666;
+  font-weight: 500;
+}
+
+.export-dialog-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+}
+
+.export-dialog-button {
+  background-color: #333333;
+  color: #ffffff;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.export-dialog-button:hover {
+  background-color: #444444;
+}
+
+.export-dialog-button-primary {
+  background-color: #0066cc;
+}
+
+.export-dialog-button-primary:hover {
+  background-color: #0052a3;
 }
