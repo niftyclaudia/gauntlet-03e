@@ -95,6 +95,59 @@ const PiPRecordingModal: React.FC<PiPRecordingModalProps> = ({
     }
   }, [isOpen]);
 
+  // Start preview streams when entering preview view
+  useEffect(() => {
+    if (currentView === 'preview' && selectedScreenId) {
+      let previewScreenStream: MediaStream | null = null;
+      let previewWebcamStream: MediaStream | null = null;
+      
+      const startPreview = async () => {
+        try {
+          console.log('[PiP DEBUG] Starting preview streams...');
+          
+          // Get screen stream
+          previewScreenStream = await navigator.mediaDevices.getUserMedia({
+            audio: false,
+            video: {
+              mandatory: {
+                chromeMediaSource: 'desktop',
+                chromeMediaSourceId: selectedScreenId,
+              },
+            } as any,
+          });
+          setScreenStream(previewScreenStream);
+          
+          // Get webcam stream
+          const webcamConstraints: MediaStreamConstraints = {
+            audio: audioMode === 'both' || audioMode === 'webcam-only',
+            video: selectedCameraId ? { deviceId: { exact: selectedCameraId } } : true,
+          };
+          previewWebcamStream = await navigator.mediaDevices.getUserMedia(webcamConstraints);
+          setWebcamStream(previewWebcamStream);
+          
+          console.log('[PiP DEBUG] Preview streams started');
+        } catch (error) {
+          console.error('[PiP DEBUG] Failed to start preview streams:', error);
+          setError('Failed to start preview');
+        }
+      };
+      
+      startPreview();
+      
+      // Cleanup on unmount or view change
+      return () => {
+        if (previewScreenStream) {
+          previewScreenStream.getTracks().forEach(track => track.stop());
+          setScreenStream(null);
+        }
+        if (previewWebcamStream) {
+          previewWebcamStream.getTracks().forEach(track => track.stop());
+          setWebcamStream(null);
+        }
+      };
+    }
+  }, [currentView, selectedScreenId, selectedCameraId, audioMode]);
+
   // Handle screen video element
   useEffect(() => {
     // Use a small timeout to ensure the video element has been rendered
@@ -654,11 +707,143 @@ const PiPRecordingModal: React.FC<PiPRecordingModalProps> = ({
           </div>
 
           <div className="modal-buttons">
-            <button className="button-primary" onClick={handleStartRecording}>
-              Start Recording
+            <button className="button-primary" onClick={() => setCurrentView('preview')}>
+              Preview
             </button>
             <button className="button-secondary" onClick={() => setCurrentView('screens')}>
               Back
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Preview view - shows what will be recorded
+  if (currentView === 'preview') {
+    return (
+      <div className="modal-overlay" onClick={onClose}>
+        <div className="modal-dialog modal-dialog-large" onClick={(e) => e.stopPropagation()}>
+          <h2 className="modal-title">Preview PiP Setup</h2>
+          
+          <div style={{ 
+            margin: '24px 0', 
+            padding: '24px', 
+            backgroundColor: '#1a1a1a', 
+            borderRadius: '8px',
+            position: 'relative',
+            minHeight: '400px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center'
+          }}>
+            {/* Screen preview with live feeds */}
+            <div style={{
+              width: '100%',
+              height: '360px',
+              backgroundColor: '#2a2a2a',
+              borderRadius: '4px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative',
+              border: '2px solid #3a3a3a',
+              overflow: 'hidden'
+            }}>
+              {/* Live screen preview */}
+              {screenStream && (
+                <video
+                  ref={screenVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'contain',
+                    backgroundColor: '#000'
+                  }}
+                />
+              )}
+              
+              {/* Placeholder if no screen stream */}
+              {!screenStream && (
+                <p style={{ color: '#666', fontSize: '14px' }}>
+                  Loading preview...
+                </p>
+              )}
+              
+              {/* Live webcam preview overlay */}
+              {webcamStream && (
+                <video
+                  ref={webcamVideoRef}
+                  autoPlay
+                  muted
+                  playsInline
+                  style={{
+                    position: 'absolute',
+                    width: webcamSize === 'small' ? '20%' : webcamSize === 'medium' ? '30%' : '40%',
+                    height: 'auto',
+                    borderRadius: webcamShape === 'circle' ? '50%' : '8px',
+                    border: '2px solid #ff6b35',
+                    objectFit: 'cover',
+                    ...(webcamPosition === 'TL' && { top: '10px', left: '10px' }),
+                    ...(webcamPosition === 'TR' && { top: '10px', right: '10px' }),
+                    ...(webcamPosition === 'BL' && { bottom: '10px', left: '10px' }),
+                    ...(webcamPosition === 'BR' && { bottom: '10px', right: '10px' }),
+                  }}
+                />
+              )}
+              
+              {/* Preview webcam overlay placeholder if no webcam stream */}
+              {!webcamStream && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    width: webcamSize === 'small' ? '20%' : webcamSize === 'medium' ? '30%' : '40%',
+                    height: 'auto',
+                    aspectRatio: '4/3',
+                    borderRadius: webcamShape === 'circle' ? '50%' : '8px',
+                    border: '2px dashed #ff6b35',
+                    backgroundColor: 'rgba(255, 107, 53, 0.1)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    color: '#ff6b35',
+                    fontSize: '12px',
+                    ...(webcamPosition === 'TL' && { top: '10px', left: '10px' }),
+                    ...(webcamPosition === 'TR' && { top: '10px', right: '10px' }),
+                    ...(webcamPosition === 'BL' && { bottom: '10px', left: '10px' }),
+                    ...(webcamPosition === 'BR' && { bottom: '10px', right: '10px' }),
+                  }}
+                >
+                  Webcam
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div style={{ 
+            padding: '16px', 
+            backgroundColor: '#2a2a2a', 
+            borderRadius: '8px',
+            marginBottom: '24px'
+          }}>
+            <p style={{ fontSize: '12px', color: '#999', marginBottom: '8px' }}>Preview Settings:</p>
+            <div style={{ fontSize: '12px', color: '#ccc' }}>
+              <p>Position: {webcamPosition}</p>
+              <p>Size: {webcamSize}</p>
+              <p>Shape: {webcamShape}</p>
+              <p>Audio: {audioMode}</p>
+            </div>
+          </div>
+
+          <div className="modal-buttons">
+            <button className="button-primary" onClick={handleStartRecording}>
+              Start Recording
+            </button>
+            <button className="button-secondary" onClick={() => setCurrentView('settings')}>
+              Back to Settings
             </button>
           </div>
         </div>
