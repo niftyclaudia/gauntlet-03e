@@ -1598,6 +1598,252 @@ body {
   font-size: 12px;
 }
 
+/* Unified Record Button Styles */
+.record-button {
+  background-color: #ff4444;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  transition: background-color 0.2s ease;
+}
+
+.record-button:hover:not(:disabled) {
+  background-color: #e03e3e;
+}
+
+.record-button:disabled {
+  background-color: #666666;
+  cursor: not-allowed;
+}
+
+.record-icon {
+  font-size: 12px;
+}
+
+/* Recording Type Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 10000;
+}
+
+.recording-type-modal {
+  background-color: #1a1a1a;
+  border-radius: 12px;
+  padding: 0;
+  min-width: 480px;
+  max-width: 90vw;
+  max-height: 90vh;
+  overflow: hidden;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.5);
+  animation: modalSlideIn 0.2s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 24px 24px 16px 24px;
+  border-bottom: 1px solid #333333;
+}
+
+.modal-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0;
+}
+
+.modal-close {
+  background: none;
+  border: none;
+  color: #999999;
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.modal-close:hover {
+  color: #ffffff;
+  background-color: #333333;
+}
+
+.modal-content {
+  padding: 24px;
+}
+
+.modal-description {
+  color: #cccccc;
+  font-size: 14px;
+  margin-bottom: 24px;
+  line-height: 1.5;
+}
+
+.recording-options {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.recording-option {
+  background: none;
+  border: 2px solid #333333;
+  border-radius: 8px;
+  padding: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  transition: all 0.2s ease;
+  text-align: left;
+  width: 100%;
+}
+
+.recording-option:hover {
+  border-color: #0066cc;
+  background-color: rgba(0, 102, 204, 0.05);
+}
+
+.recording-option:focus {
+  outline: none;
+  border-color: #0066cc;
+  box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.2);
+}
+
+.recording-option-icon {
+  color: #0066cc;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  background-color: rgba(0, 102, 204, 0.1);
+  border-radius: 8px;
+}
+
+.recording-option-content {
+  flex: 1;
+}
+
+.recording-option-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+  margin: 0 0 4px 0;
+}
+
+.recording-option-description {
+  font-size: 14px;
+  color: #999999;
+  margin: 0;
+  line-height: 1.4;
+}
+
+/* Status Pill/Chip Styles */
+.status-pill {
+  padding: 4px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  color: #ffffff;
+  display: inline-flex;
+  align-items: center;
+}
+
+.status-pill-idle {
+  background-color: #999999;
+}
+
+.status-pill-previewing {
+  background-color: #0066cc;
+}
+
+.status-pill-recording {
+  background-color: #ff4444;
+}
+
+.status-pill-saving {
+  background-color: #ffaa00;
+}
+
+.status-pill-error {
+  background-color: #ff6666;
+}
+
+/* Helper Text Styles */
+.helper-text {
+  color: #999999;
+  font-size: 13px;
+}
+
+/* Debug Info Section - matches screen recording modal style */
+.debug-info-section {
+  margin: 16px 0;
+  border: 1px solid #404040;
+  border-radius: 8px;
+  padding: 16px;
+  background-color: #1a1a1a;
+}
+
+.debug-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #333333;
+  font-size: 12px;
+}
+
+.debug-info-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.debug-info-row:first-child {
+  padding-top: 0;
+}
+
+.debug-label {
+  color: #cccccc;
+  font-weight: 500;
+  min-width: 120px;
+}
+
+.debug-value {
+  color: #ffffff;
+  font-family: monospace;
+  text-align: right;
+  flex: 1;
+}
+
 .record-screen-label {
   font-size: 14px;
 }
