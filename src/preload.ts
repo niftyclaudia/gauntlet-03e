@@ -188,4 +188,147 @@ contextBridge.exposeInMainWorld('electron', {
   revealInFinder: (filePath: string): Promise<void> => {
     return ipcRenderer.invoke('export:revealInFinder', filePath);
   },
+
+  /**
+   * Screen recording API
+   */
+  recording: {
+    /**
+     * Get available screens for recording
+     * @returns Promise with screens array or error
+     */
+    getScreens: (): Promise<{ screens: any[]; error?: string }> => {
+      return ipcRenderer.invoke('recording:get-screens');
+    },
+
+    /**
+     * Start recording session
+     * @param screenSourceId - Screen source ID from desktopCapturer
+     * @param audioEnabled - Whether microphone audio is enabled
+     * @returns Promise with success status and sessionId
+     */
+    startRecording: (
+      screenSourceId: string,
+      audioEnabled: boolean
+    ): Promise<{ success: boolean; sessionId?: string; error?: string }> => {
+      return ipcRenderer.invoke('recording:start', { screenSourceId, audioEnabled });
+    },
+
+    /**
+     * Stop recording and convert to MP4
+     * @param sessionId - Recording session ID
+     * @returns Promise with success status, filePath, and duration
+     */
+    stopRecording: (
+      sessionId: string
+    ): Promise<{ success: boolean; filePath?: string; duration?: number; error?: string }> => {
+      return ipcRenderer.invoke('recording:stop', { sessionId });
+    },
+
+    /**
+     * Cancel recording and cleanup
+     * @param sessionId - Recording session ID
+     * @returns Promise with success status
+     */
+    cancelRecording: (sessionId: string): Promise<{ success: boolean; error?: string }> => {
+      return ipcRenderer.invoke('recording:cancel', { sessionId });
+    },
+
+    /**
+     * Get audio level (0-100)
+     * @param sessionId - Recording session ID
+     * @returns Promise with audio level
+     */
+    getAudioLevel: (sessionId: string): Promise<{ level: number }> => {
+      return ipcRenderer.invoke('recording:get-audio-level', { sessionId });
+    },
+
+    /**
+     * Listen to elapsed time updates (every 100ms during recording)
+     * @param callback - Callback function receiving seconds
+     * @returns Cleanup function to remove listener
+     */
+    onElapsedTime: (callback: (data: { seconds: number; sessionId: string }) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: { seconds: number; sessionId: string }) => {
+        callback(data);
+      };
+      ipcRenderer.on('recording:elapsed-time', handler);
+      return () => {
+        ipcRenderer.removeListener('recording:elapsed-time', handler);
+      };
+    },
+
+    /**
+     * Listen to recording state changes
+     * @param callback - Callback function receiving state
+     * @returns Cleanup function to remove listener
+     */
+    onStateChanged: (callback: (data: { state: string; sessionId: string }) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: { state: string; sessionId: string }) => {
+        callback(data);
+      };
+      ipcRenderer.on('recording:state-changed', handler);
+      return () => {
+        ipcRenderer.removeListener('recording:state-changed', handler);
+      };
+    },
+
+    /**
+     * Listen to audio level updates (every 200ms during recording)
+     * @param callback - Callback function receiving level (0-100)
+     * @returns Cleanup function to remove listener
+     */
+    onAudioLevel: (callback: (level: number) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, level: number) => {
+        callback(level);
+      };
+      ipcRenderer.on('recording:audio-level', handler);
+      return () => {
+        ipcRenderer.removeListener('recording:audio-level', handler);
+      };
+    },
+
+    /**
+     * Listen to recording errors
+     * @param callback - Callback function receiving error message
+     * @returns Cleanup function to remove listener
+     */
+    onError: (callback: (data: { message: string; sessionId: string }) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: { message: string; sessionId: string }) => {
+        callback(data);
+      };
+      ipcRenderer.on('recording:error', handler);
+      return () => {
+        ipcRenderer.removeListener('recording:error', handler);
+      };
+    },
+
+    /**
+     * Listen to recording completion
+     * @param callback - Callback function receiving filePath and duration
+     * @returns Cleanup function to remove listener
+     */
+    onComplete: (callback: (data: { filePath: string; duration: number; sessionId: string }) => void): (() => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: { filePath: string; duration: number; sessionId: string }) => {
+        callback(data);
+      };
+      ipcRenderer.on('recording:complete', handler);
+      return () => {
+        ipcRenderer.removeListener('recording:complete', handler);
+      };
+    },
+
+    /**
+     * Write WebM recording data to temp file
+     * @param sessionId - Recording session ID
+     * @param data - ArrayBuffer or base64 string of recording data
+     * @returns Promise with success status
+     */
+    writeRecordingFile: (
+      sessionId: string,
+      data: ArrayBuffer | string
+    ): Promise<{ success: boolean; error?: string }> => {
+      return ipcRenderer.invoke('recording:write-file', { sessionId, data });
+    },
+  },
 });

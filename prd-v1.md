@@ -1,754 +1,703 @@
-# ollo MVP - Product Requirements Document
+# ollo - User Stories & Feature Breakdown
 
-**Version**: 1.2  
-**Target Platform**: macOS (primary)  
-**Tech Stack**: Electron + Vite + React + TypeScript + FFmpeg
-
----
-
-## Project Overview
-
-ollo is a desktop video editor MVP. Success = importing videos, storing them in a library, arranging them on a timeline, trimming them, and exporting a final MP4.
+**Document Version**: 1.0
+**Product**: ollo Desktop Video Editor (Post-MVP Features)
+**Total Stories**: 14 (7 REQUIRED + 7 STRETCH GOALS)
 
 ---
 
-## MVP Success Criteria
+## MVP Status
 
-The MVP is complete when you can:
-1. Launch the app as a native desktop application
-2. Import 3 different video files (MP4/MOV) into Library
-3. Drag clips from Library to Timeline
-4. Reorder clips by dragging horizontally on timeline
-5. Trim each clip by dragging handles
-6. Preview clips and sequence with visual playhead
-7. Export the final sequence as a single MP4 file
-8. The exported video plays correctly with synchronized audio
+**✅ MVP COMPLETE** - All 8 core features implemented and tested:
+- ✅ Video import (MP4/MOV) with drag-and-drop
+- ✅ Library panel with thumbnails and duration
+- ✅ Timeline with drag-and-drop sequencing
+- ✅ Clip trimming with visual handles
+- ✅ Video preview with HTML5 player
+- ✅ MP4 export with H.264/AAC codecs
+- ✅ Auto-save every 30 seconds
+- ✅ Session recovery on app restart
 
----
+**Ready for Phase 5+ Features** - Post-MVP enhancement stories below.
 
-
-## Out of Scope for MVP
-
-- Screen/camera recording
-- Splitting clips at playhead
-- Audio effects or volume control
-- Video effects, filters, or transitions
-- Text overlays
-- Undo/redo
-- Manual project save/load (but auto-save is included)
-- Custom export settings
-- Windows/Linux support (macOS only for MVP)
+**Current Implementation Status**:
+- ✅ **Core App**: Electron + Vite + React + TypeScript + FFmpeg
+- ✅ **Components**: Library, VideoPlayer, Timeline, ExportDialog, and supporting UI components
+- ✅ **Hooks**: Auto-save, session restore, file import, export, trim operations
+- ✅ **IPC Handlers**: File system operations, FFmpeg integration, project state management
+- ✅ **Platform**: macOS primary, Windows secondary support
 
 ---
 
-## Functional Requirements
+## Story Mapping
 
-### 1. Application Launch
+| Story # | Feature | Phase | Status | Complexity | Dependencies |
+|---------|---------|-------|--------|-----------|--------------|
+| S11 | Screen Recording | 5 | ✅ REQUIRED | Complex | MVP Complete |
+| S12 | Webcam Recording | 5 | ✅ REQUIRED | Complex | MVP Complete |
+| S13 | Picture-in-Picture Recording | 5 | ✅ REQUIRED | Complex | S9, S10 |
+| S14 | Advanced Timeline (Multiple Tracks) | 5 | ✅ REQUIRED | Complex | MVP Complete |
+| S15 | Split & Advanced Trim | 5 | ✅ REQUIRED | Medium | MVP Timeline |
+| S16 | Advanced Export Options | 6 | ✅ REQUIRED | Medium | MVP Export |
+| S17 | Audio Capture & Controls | 6 | ✅ REQUIRED | Medium | S9, S10 |
+| S19 | Audio Effects (Fade, Normalize, Pan) | 6 | ⚡ STRETCH | Medium | S15 |
+| S20 | Video Filters & Effects | 6 | ⚡ STRETCH | Complex | MVP Timeline |
+| S21 | Transitions Between Clips | 6 | ⚡ STRETCH | Complex | S17 |
+| S22 | Text Overlays with Animations | 6 | ⚡ STRETCH | Complex | MVP Timeline |
+| S23 | Keyboard Shortcuts | 7 | ⚡ STRETCH | Simple | MVP Complete |
+| S24 | Undo/Redo System | 7 | ⚡ STRETCH | Complex | MVP Complete |
+| S25 | Enhanced Auto-Save & Project Recovery | 7 | ⚡ STRETCH | Medium | MVP Auto-Save |
 
-- App launches as native macOS application
-- Window size: 1200x800px (resizable)
-- App title: "ollo"
-- Initial state shows empty timeline with "Drag video files here or click to import"
+---
 
-### 2. Video Import
+## REQUIRED FEATURES (Phase 5-6)
 
-**Drag & Drop**
-- Drag video files from Finder into Library panel
-- Supported formats: .mp4, .mov
-- Visual feedback when dragging over app
-- Multiple files can be dropped at once
+### Story S9: Screen Recording
 
-**File Picker**
-- "Import Videos" button opens native file picker
-- Multiple file selection enabled
-- Imported clips appear in Library panel
+**As a** content creator or educator
+**I want** to record my screen with audio capture
+**So that** I can create tutorials, presentations, and screen-based content without leaving ollo
 
-**Validation**
-- Error message for unsupported file types
-- Loading indicator while reading file metadata
-- Warning message for files 1GB+ ("Large file - processing may take longer")
-- Block files 4GB+ with error ("File too large. Please use files under 4GB")
+**User Value**: Eliminates need for external screen recording tools; enables one-app workflow for tutorial creation.
 
-### 3. Library View
+**Acceptance Criteria**:
 
-**Layout**
-- Left panel (20% of window width)
-- Scrollable list/grid of all imported clips
-- Empty state: "Drag & drop video files or click Import to get started"
+- [ ] **AC-1**: User can click "Record Screen" button in main toolbar
+- [ ] **AC-2**: Dialog displays list of available screens and windows (using desktopCapturer API)
+- [ ] **AC-3**: User can select specific screen or window to record
+- [ ] **AC-4**: Recording indicator (red dot + timer) appears when actively recording
+- [ ] **AC-5**: Microphone permission requested before recording starts
+- [ ] **AC-6**: Audio and video remain synchronized during 30-second recording
+- [ ] **AC-7**: Stop button halts recording and saves file to temp location
+- [ ] **AC-8**: Recorded video automatically added to Library with playable thumbnail
+- [ ] **AC-9**: User can rename recording before adding to timeline
+- [ ] **AC-10**: Screen recording works on both macOS and Windows (best-effort)
+- [ ] **AC-11**: Handles window closure during recording (video still saves)
+- [ ] **AC-12**: Error dialog shown if microphone permission denied; screen-only recording allowed
 
-**Clip Display**
-- Thumbnail (first frame)
-- Filename
-- Duration (MM:SS format)
-- Click to preview in player
-- Drag to Timeline to add to sequence
+**Definition of Done**:
+- Implementation complete without crashes
+- Happy path tested (30sec screen recording → library → playable)
+- Edge cases tested (window closed, permission denied)
+- Performance: Recording at native resolution without frame drops
+- Cross-platform tested (Mac + Windows)
 
-**Interaction**
-- Click clip in Library → plays in preview player
-- Drag clip from Library to Timeline → adds to sequence
-- Allow duplicate imports (same file can be added multiple times)
-- Store file paths (linked files, not embedded)
+**Complexity**: Complex (requires Electron desktopCapturer API, WebRTC integration, file handling)
 
-### 4. Timeline Interface
+**Phase**: 5 (Core Features)
 
-**Layout**
-- Bottom panel (30% of window height)
-- Horizontal timeline with clips in sequence
-- Left-to-right playback order
-- Total duration display
-- Visual playhead (red vertical line) showing current time position
-- Timecode display (HH:MM:SS.mmm) above timeline
+**Priority**: ✅ REQUIRED
 
-**Zoom Controls**
-- Zoom slider (range: 100% to 1000%)
-  - 100% = ~1 pixel per second
-  - 1000% = ~10 pixels per second
-- Default zoom on load: Auto-fit (entire timeline visible in viewport)
-- Horizontal scroll when zoomed in
-- Keyboard shortcuts: Cmd+Plus, Cmd+Minus
-- Zoom indicator showing current level (e.g., "500%")
+---
 
-**Clip Management**
-- Drag clips from Library onto Timeline
-- Reorder clips by dragging horizontally
-- Clips snap together (no gaps, no overlaps)
-- Delete clips (right-click → Delete or Delete key)
-- "Clear All" button removes all clips
+### Story S10: Webcam Recording
 
-**Clip Cards**
-- Video thumbnail from first frame
-- Filename below thumbnail
-- Duration overlay (bottom-right)
-- Trim handles on left and right edges
-- Clip width scales with zoom level
-- Trim handles become more/less precise at different zoom levels
+**As a** content creator doing face-on-camera content
+**I want** to record my webcam with synchronized microphone audio
+**So that** I can create vlogs, testimonials, and talking-head videos within ollo
 
-**Selection & Deletion**
-- Click to select clip (visual highlight)
-- Selected clip appears in preview player
-- Delete key removes selected clip
-- "Clear All" button removes all clips
+**User Value**: Built-in camera recording removes dependency on separate camera recording software.
 
-### 5. Video Trimming
+**Acceptance Criteria**:
 
-**Trim Handles**
-- Draggable handles on left (start) and right (end) edges
-- Cursor changes to resize indicator on hover
+- [ ] **AC-1**: User can click "Record Webcam" button in toolbar
+- [ ] **AC-2**: Camera permission dialog appears (standard getUserMedia flow)
+- [ ] **AC-3**: Live preview of camera feed displays before recording
+- [ ] **AC-4**: If multiple cameras available, user can select specific camera
+- [ ] **AC-5**: Start button initiates recording to temp file
+- [ ] **AC-6**: Pause button available during recording (optional; required for MVP is stop only)
+- [ ] **AC-7**: Stop button ends recording and saves to temp location
+- [ ] **AC-8**: Recording automatically added to Library with thumbnail
+- [ ] **AC-9**: Video plays back with correct resolution (720p or 1080p)
+- [ ] **AC-10**: Audio captured from microphone is synchronized with video
+- [ ] **AC-11**: Error message shown if camera already in use by another app
+- [ ] **AC-12**: Error message shown if camera permission denied with recovery option
 
-**Trim Behavior**
-- Drag left handle right to trim start
-- Drag right handle left to trim end
-- Minimum clip duration: 1.0 seconds
-- Duration updates in real-time
-- Thumbnail updates to show new start frame
+**Definition of Done**:
+- Webcam recording functional on Mac and Windows
+- Live preview smooth (30fps minimum)
+- Audio/video sync verified in playback
+- Handles camera permission denial gracefully
+- No crashes during extended recording (tested 5+ minutes)
 
-### 6. Video Preview Player
+**Complexity**: Complex (WebRTC camera access, audio sync, permission handling)
 
-**Layout**
-- Center panel (40% of window width)
-- Player positioned above timeline
-- 16:9 aspect ratio maintained
-- Controls: Play/Pause, progress bar, time display
+**Phase**: 5 (Core Features)
 
-**Playback**
-- Click clip in Library → plays that clip only
-- Click Play → plays from current playhead position through all timeline clips in sequence
-- Spacebar toggles play/pause
-- Progress bar is draggable (seek)
-- Audio plays synchronized with video
-- Drag playhead → updates preview in real-time (scrubbing)
+**Priority**: ✅ REQUIRED
 
-**Performance**
-- Playback at minimum 30fps (smooth motion)
-- Scrubbing updates preview within 100ms
+---
 
-**Sequence Preview**
-- "Preview Sequence" button plays all clips in order
-- Smooth transitions between clips
-- Playback stops at end
+### Story S11: Picture-in-Picture Recording
 
-### 7. Video Export
+**As a** educator or presenter
+**I want** to simultaneously record my screen and webcam, compositing the webcam as an overlay
+**So that** I can create engaging tutorials with both screen activity and my face visible in one video
 
-**Export Process**
-- "Export Video" button (disabled if timeline empty)
-- Opens native file picker to choose save location
-- Default filename: ollo_export_[timestamp].mp4
-- Progress bar shows export progress (0-100%)
+**User Value**: Enables PiP-style content production without external compositing software; professional presentation capability.
 
-**Export Settings** (fixed preset)
-- Format: MP4
-- Video codec: H.264 (libx264)
-- Audio codec: AAC
-- Resolution: Match highest source resolution (max 1080p)
-- Frame rate: Fixed 30fps
-- Bitrate: ~5Mbps for 1080p (medium quality)
-- Audio: AAC codec, 128kbps
+**Acceptance Criteria**:
 
-**Mixed Source Handling**
-- Different frame rates (30fps vs 60fps) → export at 30fps
-- Different resolutions (1080p vs 720p) → export at highest (max 1080p), upscale lower-res
-- Different aspect ratios → export matches first clip's aspect ratio, letterbox others
+- [ ] **AC-1**: User can click "Record Screen + Webcam (PiP)" option
+- [ ] **AC-2**: Both screen and webcam capture occur simultaneously
+- [ ] **AC-3**: Webcam preview overlay appears in recording dialog
+- [ ] **AC-4**: User can configure webcam position: TL, TR, BL, BR
+- [ ] **AC-5**: User can select webcam size: Small (20%), Medium (30%), Large (40%)
+- [ ] **AC-6**: Optional webcam border styling (rounded corners, shadow)
+- [ ] **AC-7**: Both microphone tracks mixed or selectable as primary
+- [ ] **AC-8**: Stop recording saves composite video to temp location
+- [ ] **AC-9**: Composite video plays correctly (screen + webcam overlay visible)
+- [ ] **AC-10**: Audio from both sources properly synchronized
+- [ ] **AC-11**: Export with PiP uses FFmpeg overlay filter correctly
+- [ ] **AC-12**: Handles case where one source fails (fall back to screen-only)
 
-**Completion**
-- Success message with file path
-- "Reveal in Finder" button
-- Error message if export fails
+**Definition of Done**:
+- PiP recording produces valid MP4 with both layers visible
+- Tested with different aspect ratios (no distortion)
+- Overlay positioning accurate and customizable
+- Audio mixing clean and balanced
+- No sync drift during playback
+- Cross-platform compatible (Mac + Windows)
 
-### 8. Auto-Save & Session Recovery
+**Complexity**: Complex (simultaneous WebRTC + desktopCapturer, FFmpeg overlay, sync management)
 
-**Auto-Save Behavior**
-- App automatically saves project state every 30 seconds
-- Saves to temp file: `~/Library/Application Support/ollo/autosave.json`
-- Project state includes:
-  - All imported clips (file paths, not video data)
-  - Trim points for each clip
-  - Clip order in timeline
-  - Selected clip
+**Phase**: 5 (Core Features)
 
-**Session Recovery**
-- On app launch, check for autosave file
-- If found and less than 24 hours old, show dialog: "Restore previous session?"
-- Options: "Restore" or "Start Fresh"
-- If user chooses "Restore", load clips back into timeline
-- If user chooses "Start Fresh", delete autosave file
+**Priority**: ✅ REQUIRED
 
-**Save Triggers**
-- Every 30 seconds (if timeline has clips)
-- Before export starts
-- When app is closing (if possible)
+**Depends On**: S9 (Screen Recording), S10 (Webcam Recording)
 
-**File Format** (JSON):
-```json
-{
-  "version": "1.0",
-  "timestamp": "2025-10-27T10:30:00Z",
-  "library": [
-    {
-      "id": "uuid",
-      "path": "/path/to/video.mp4",
-      "filename": "video.mp4",
-      "duration": 120.5,
-      "thumbnail": "path/to/thumbnail.jpg",
-      "metadata": { "width": 1920, "height": 1080, "framerate": 30, "codec": "h264" }
-    }
-  ],
-  "timeline": [
-    {
-      "id": "uuid",
-      "libraryClipId": "uuid",
-      "trimStart": 0,
-      "trimEnd": 120.5,
-      "order": 0
-    }
-  ],
-  "selectedClipId": "uuid",
-  "currentPlayheadPosition": 0,
-  "timelineZoom": 1.0,
-  "timelineScrollPosition": 0
-}
+---
+
+### Story S12: Advanced Timeline (Multiple Tracks)
+
+**As a** video editor
+**I want** to arrange clips across multiple independent tracks (e.g., main video + overlay)
+**So that** I can create layered compositions with picture-in-picture, graphics overlays, and split-screen effects
+
+**User Value**: Multi-track timeline enables professional-grade compositing; differentiates from simple linear editors.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Timeline displays minimum 2 tracks: "Video" and "Overlay"
+- [ ] **AC-2**: User can add/remove additional tracks (up to 5 max)
+- [ ] **AC-3**: Each track can be renamed (e.g., "Screen", "Webcam", "Graphics")
+- [ ] **AC-4**: Clips dragged to different tracks position independently
+- [ ] **AC-5**: Clips on different tracks can overlap horizontally (by time)
+- [ ] **AC-6**: Vertical track arrangement preserved: Track 1 (bottom) → Track N (top)
+- [ ] **AC-7**: Each track can be toggled on/off (affects export composition)
+- [ ] **AC-8**: Each track can be muted independently (audio disabled)
+- [ ] **AC-9**: Each track shows solo button (isolate audio from that track)
+- [ ] **AC-10**: Track opacity adjustable per track (0-100%)
+- [ ] **AC-11**: Zoom slider affects all tracks simultaneously
+- [ ] **AC-12**: Timeline UI remains responsive with 10+ clips across 4 tracks
+- [ ] **AC-13**: Export correctly composes all enabled tracks using FFmpeg
+
+**Definition of Done**:
+- Multi-track timeline renders correctly without visual artifacts
+- Clips reorder/delete smoothly across tracks
+- Export produces correct layered output (verified frame-by-frame)
+- Performance: <100ms response time for drag operations
+- No memory leaks with extended editing (4+ tracks, 20+ clips)
+
+**Complexity**: Complex (state management, FFmpeg composition, UI responsiveness)
+
+**Phase**: 5 (Core Features)
+
+**Priority**: ✅ REQUIRED
+
+---
+
+### Story S13: Split & Advanced Trim
+
+**As a** video editor
+**I want** to split clips at any point on the timeline and trim with frame-precision
+**So that** I can create tight edits without importing the same clip multiple times
+
+**User Value**: Reduces friction in fine-editing workflow; enables creative jump-cuts and precise pacing.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: User can position playhead within a clip on timeline
+- [ ] **AC-2**: "Split" button or keyboard shortcut (Cmd/Ctrl+X) available
+- [ ] **AC-3**: Split divides clip into two segments (before/after playhead)
+- [ ] **AC-4**: Both segments display correctly with updated durations
+- [ ] **AC-5**: Both segments inherit any effects/filters applied (if applicable)
+- [ ] **AC-6**: Trim UI shows in/out point timecodes (e.g., "00:10.5 - 00:45.2")
+- [ ] **AC-7**: Frame count displayed for frame-precise trimming
+- [ ] **AC-8**: Snap-to-grid option available (1sec, 500ms, or frame-precise)
+- [ ] **AC-9**: Snap-to-clip-edges automatically aligns adjacent clips
+- [ ] **AC-10**: Visual feedback (highlight) when snap point reached
+- [ ] **AC-11**: Toggle snap on/off via checkbox or shortcut
+- [ ] **AC-12**: Split near start/end creates minimal segment (1 frame) without error
+- [ ] **AC-13**: Cannot split before any clips added (error message shown)
+
+**Definition of Done**:
+- Split operation produces two independent clip objects in state
+- Trim points calculated correctly; export duration matches intended
+- Snap-to-grid aligns within 1-3 pixels of target
+- Performance: <50ms response for trim drag
+- Handles edge cases (very short segments, split near boundaries)
+
+**Complexity**: Medium (state management, timecode math, UI feedback)
+
+**Phase**: 5 (Core Features)
+
+**Priority**: ✅ REQUIRED
+
+---
+
+### Story S14: Advanced Export Options
+
+**As a** content creator
+**I want** to export my video at different resolutions and with preset configurations for different platforms
+**So that** I can optimize file size and dimensions for YouTube, TikTok, Instagram, or custom use cases
+
+**User Value**: Enables one-click platform optimization; eliminates manual codec/bitrate selection.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Export dialog displays resolution presets: 720p, 1080p, 4K (if hardware capable)
+- [ ] **AC-2**: Custom resolution input available for non-standard dimensions
+- [ ] **AC-3**: Bitrate presets: Low (2Mbps), Medium (5Mbps), High (10Mbps), Custom
+- [ ] **AC-4**: Frame rate options: 24fps, 30fps, 60fps
+- [ ] **AC-5**: Platform presets available: YouTube, Instagram, TikTok, Twitter, Custom
+- [ ] **AC-6**: Each preset auto-fills resolution, bitrate, and format
+- [ ] **AC-7**: YouTube preset: 1080p@30fps, 12Mbps, H.264, MP4
+- [ ] **AC-8**: Instagram preset: 1080x1350 (vertical), 5Mbps
+- [ ] **AC-9**: TikTok preset: 1080x1920 (vertical), 5Mbps
+- [ ] **AC-10**: User can create/save custom export presets
+- [ ] **AC-11**: Unsupported resolution shows warning (e.g., 4K requested but source is 720p)
+- [ ] **AC-12**: Export file organized to `exports/YYYY-MM-DD/` folder structure
+- [ ] **AC-13**: Batch export available (export multiple timelines with different presets)
+
+**Definition of Done**:
+- All preset exports produce files at correct resolution/bitrate (verified with ffprobe)
+- No upscaling artifacts on lower-res source → higher-res output
+- Preset saved/loaded correctly from user preferences
+- Export completes without crashes for all presets
+- File organization matches spec
+
+**Complexity**: Medium (preset system, FFmpeg command building, UI)
+
+**Phase**: 6 (Polish Features)
+
+**Priority**: ✅ REQUIRED
+
+---
+
+### Story S15: Audio Capture & Controls
+
+**As a** video creator
+**I want** to capture audio from microphone and system sources, and adjust per-track volume/muting during editing
+**So that** I can balance audio levels between recorded sources and create professional-sounding final products
+
+**User Value**: Eliminates post-production audio editing in external tools; in-app audio management streamlines workflow.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Microphone audio captured during screen/webcam recording
+- [ ] **AC-2**: System audio (computer speaker output) capturable separately (requires OS permission)
+- [ ] **AC-3**: Per-track volume slider: -12dB to +12dB adjustable
+- [ ] **AC-4**: Mute/unmute toggle per track
+- [ ] **AC-5**: Solo button isolates audio from single track during playback/export
+- [ ] **AC-6**: Audio level meter shows real-time levels during recording
+- [ ] **AC-7**: Audio level meter shows real-time levels during playback
+- [ ] **AC-8**: Waveform preview visible in advanced view (optional enhancement)
+- [ ] **AC-9**: Pan control (left/right balance) available per track
+- [ ] **AC-10**: Volume changes preview correctly in real-time playback
+- [ ] **AC-11**: Muted tracks produce no audio in final export
+- [ ] **AC-12**: Solo mode exports only selected track's audio
+- [ ] **AC-13**: Multiple audio tracks mixed correctly without clipping
+
+**Definition of Done**:
+- Audio adjustments audible in export (verified by listening)
+- Volume slider values convert to FFmpeg -b:a parameter correctly
+- No audio sync drift during playback with volume changes
+- Peak audio levels not exceeded (no digital clipping)
+- Handles edge case: all tracks muted (silent export)
+
+**Complexity**: Medium (WebRTC audio handling, FFmpeg audio filters, UI)
+
+**Phase**: 6 (Polish Features)
+
+**Priority**: ✅ REQUIRED
+
+---
+
+## STRETCH GOALS (Phase 6-7)
+
+### Story S16: Audio Effects (Fade, Normalize, Pan)
+
+**As a** audio engineer or careful editor
+**I want** to apply fade in/out and normalize audio levels on individual tracks
+**So that** I can create smooth audio transitions and prevent audio level inconsistencies
+
+**User Value**: Professional audio polish without third-party tools; improves perceived production quality.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Fade in effect available: linear, exponential curve options
+- [ ] **AC-2**: Fade out effect available with duration customization (0.5-5 seconds)
+- [ ] **AC-3**: Normalize button auto-adjusts track to -3dB target level
+- [ ] **AC-4**: Pan control allows left/right balance adjustment
+- [ ] **AC-5**: Audio fade visualized in timeline (gradient overlay on track)
+- [ ] **AC-6**: Fade duration editable by dragging on timeline
+- [ ] **AC-7**: Export applies fade effects correctly
+- [ ] **AC-8**: Normalize recalculated correctly after trim or clip adjustments
+- [ ] **AC-9**: Multiple effects stackable per track (fade + normalize + pan)
+- [ ] **AC-10**: Preview audio with effects in real-time
+
+**Definition of Done**:
+- Fade audible in export (smooth amplitude ramp)
+- Normalize prevents clipping and equalizes levels
+- Effects don't cause sync drift
+- Performance: <200ms update for effect preview
+
+**Complexity**: Medium (FFmpeg audio filters, preview updates)
+
+**Phase**: 6 (Polish Features)
+
+**Priority**: ⚡ STRETCH GOAL
+
+**Depends On**: S15 (Audio Capture & Controls)
+
+---
+
+### Story S17: Video Filters & Effects
+
+**As a** video creator
+**I want** to apply real-time filters (brightness, contrast, saturation, blur, grayscale) to individual clips or entire tracks
+**So that** I can create consistent looks, correct color issues, and achieve creative effects without external software
+
+**User Value**: In-app color correction and creative effects increase production value; eliminates extra software.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Filter panel accessible for selected clip or track
+- [ ] **AC-2**: Brightness filter: -100 to +100 (adjustable slider)
+- [ ] **AC-3**: Contrast filter: -100 to +100
+- [ ] **AC-4**: Saturation filter: -100 to +100
+- [ ] **AC-5**: Hue shift filter: 0-360° color wheel
+- [ ] **AC-6**: Grayscale toggle (black & white conversion)
+- [ ] **AC-7**: Blur filter: 0-50px radius
+- [ ] **AC-8**: Real-time preview updates in player as filter adjusted
+- [ ] **AC-9**: Multiple filters stackable per clip
+- [ ] **AC-10**: Opacity control per filter (0-100%)
+- [ ] **AC-11**: Blend mode selection (Normal, Multiply, Screen, Overlay, etc.)
+- [ ] **AC-12**: Filters apply to clip in isolation (non-destructive)
+- [ ] **AC-13**: Filters baked into export using FFmpeg filter_complex
+
+**Definition of Done**:
+- Each filter applies correctly in FFmpeg (verified visually)
+- Filter preview <200ms update time
+- Export filters match preview appearance
+- No video corruption or artifacts
+- Stacking 3+ filters maintains performance (30fps+ playback)
+
+**Complexity**: Complex (FFmpeg filter chains, real-time preview, state management)
+
+**Phase**: 6 (Polish Features)
+
+**Priority**: ⚡ STRETCH GOAL
+
+---
+
+### Story S18: Transitions Between Clips
+
+**As a** video editor
+**I want** to apply smooth animated transitions (fade, slide, dissolve, wipe) between clips on the timeline
+**So that** I can create professional-looking sequences without jarring jump cuts
+
+**User Value**: Polished transitions elevate production quality; improves viewer experience.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Transition effects available: Fade, Slide, Dissolve, Wipe
+- [ ] **AC-2**: User can drag transition icon to clip boundary
+- [ ] **AC-3**: Transition duration customizable: 0.5-2 seconds
+- [ ] **AC-4**: Preview shows transition animation in player (smooth)
+- [ ] **AC-5**: Fade transition: smooth alpha blend between clips
+- [ ] **AC-6**: Slide transition: direction customizable (L, R, U, D)
+- [ ] **AC-7**: Dissolve transition: crossfade effect
+- [ ] **AC-8**: Wipe transition: animated border reveals next clip
+- [ ] **AC-9**: Apply same transition to all clip boundaries (batch action)
+- [ ] **AC-10**: Remove transition from clip boundary
+- [ ] **AC-11**: Export renders transitions smoothly (no jank)
+- [ ] **AC-12**: Transition duration cannot exceed remaining clip time (auto-truncate or warn)
+
+**Definition of Done**:
+- Each transition type renders correctly in FFmpeg
+- Transition preview smooth (30fps minimum)
+- Export with transitions matches preview
+- No sync drift or audio artifacts during transition
+- Handles edge case: transition on single clip (error message)
+
+**Complexity**: Complex (FFmpeg xfade filter, preview sync, timeline UI)
+
+**Phase**: 6 (Polish Features)
+
+**Priority**: ⚡ STRETCH GOAL
+
+**Depends On**: S17 (Video Filters & Effects)
+
+---
+
+### Story S19: Text Overlays with Animations
+
+**As a** content creator
+**I want** to add custom text overlays with animations (fade, slide, type-on) to my video timeline
+**So that** I can add titles, captions, credits, and animated text elements for better engagement
+
+**User Value**: In-app text capability reduces need for separate motion graphics software; enables creative storytelling.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Insert → Text menu option available
+- [ ] **AC-2**: Text input dialog with font, size, color, bold/italic, alignment
+- [ ] **AC-3**: Supported fonts: System fonts + Arial, Helvetica, sans-serif web fonts
+- [ ] **AC-4**: Font size: 12-200pt adjustable
+- [ ] **AC-5**: Text color picker (RGB/Hex)
+- [ ] **AC-6**: Drag text on preview canvas to position
+- [ ] **AC-7**: X/Y coordinate input for pixel-perfect positioning
+- [ ] **AC-8**: Opacity control: 0-100%
+- [ ] **AC-9**: Optional background box with padding and border-radius
+- [ ] **AC-10**: Animation types: Fade in/out, Slide in/out, Type-on effect
+- [ ] **AC-11**: Animation duration customizable
+- [ ] **AC-12**: Keyframe support for advanced animation (optional)
+- [ ] **AC-13**: Max text length: 500 characters
+- [ ] **AC-14**: Text preview shows in real-time player
+- [ ] **AC-15**: Export renders text using FFmpeg drawtext filter
+- [ ] **AC-16**: Missing font file falls back to system default
+
+**Definition of Done**:
+- Text renders correctly in export (readable, proper position/color)
+- Animations play smoothly (30fps+ preview)
+- Long text wraps or truncates based on canvas space
+- Font files handled gracefully (no crashes on missing font)
+- Tested with special characters and multi-line text
+
+**Complexity**: Complex (FFmpeg drawtext, keyframe system, font handling)
+
+**Phase**: 6 (Polish Features)
+
+**Priority**: ⚡ STRETCH GOAL
+
+---
+
+### Story S20: Keyboard Shortcuts
+
+**As a** power user
+**I want** to use keyboard shortcuts for common editing actions (play/pause, navigation, split, delete)
+**So that** I can work faster without reaching for the mouse constantly
+
+**User Value**: Faster editing workflow; enables pro user efficiency.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Space bar: Toggle play/pause
+- [ ] **AC-2**: J key: Rewind 1 second
+- [ ] **AC-3**: K key: Stop/pause (alternative to space)
+- [ ] **AC-4**: L key: Forward 1 second
+- [ ] **AC-5**: Shift+L: Fast-forward 10 seconds
+- [ ] **AC-6**: Cmd/Ctrl+X: Split clip at playhead
+- [ ] **AC-7**: Cmd/Ctrl+D: Delete selected clip
+- [ ] **AC-8**: Cmd/Ctrl+Z: Undo last action
+- [ ] **AC-9**: Cmd/Ctrl+Shift+Z: Redo
+- [ ] **AC-10**: Cmd/Ctrl+A: Select all clips
+- [ ] **AC-11**: Delete key: Remove selected clip
+- [ ] **AC-12**: Cmd/Ctrl+E: Open export dialog
+- [ ] **AC-13**: Cmd/Ctrl+I: Import files
+- [ ] **AC-14**: Cmd/Ctrl+S: Save session (explicit save trigger)
+- [ ] **AC-15**: Cmd/Ctrl+,: Open preferences
+- [ ] **AC-16**: Keyboard shortcut cheat sheet in Help menu
+- [ ] **AC-17**: User can remap shortcuts in Preferences
+- [ ] **AC-18**: Tooltips show keyboard shortcuts for buttons
+
+**Definition of Done**:
+- All shortcuts respond correctly to key presses
+- Shortcuts displayed in help documentation
+- Platform-specific shortcuts (Cmd for Mac, Ctrl for Windows)
+- No conflicts with system shortcuts
+- Shortcut customization UI functional
+
+**Complexity**: Simple (keyboard event handlers, shortcut remapping)
+
+**Phase**: 7 (Keyboard Shortcuts & Polish)
+
+**Priority**: ⚡ STRETCH GOAL
+
+---
+
+### Story S21: Undo/Redo System
+
+**As a** editor making many adjustments
+**I want** to undo and redo actions (clip moves, trims, effects, text additions)
+**So that** I can experiment fearlessly and correct mistakes without redoing work
+
+**User Value**: Risk-free editing; enables experimentation and rapid iteration.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Cmd/Ctrl+Z triggers undo
+- [ ] **AC-2**: Cmd/Ctrl+Shift+Z triggers redo
+- [ ] **AC-3**: Undo button in toolbar (disabled when stack empty)
+- [ ] **AC-4**: Redo button in toolbar (disabled when stack empty)
+- [ ] **AC-5**: Undo/redo stack limited to 100 actions or 500MB
+- [ ] **AC-6**: Tooltip on undo/redo button shows action being undone/redone
+- [ ] **AC-7**: Tracked actions: clip add, delete, trim, reorder, split, effects applied, text added
+- [ ] **AC-8**: Undo pops action from stack, pushes to redo stack
+- [ ] **AC-9**: Redo pops from redo stack, pushes to undo stack
+- [ ] **AC-10**: New action after undo clears redo stack
+- [ ] **AC-11**: Undo past initial state disables (no-op)
+- [ ] **AC-12**: Session restore preserves undo history (optional: clear on crash recovery)
+- [ ] **AC-13**: Memory stable after 50+ undo/redo cycles
+
+**Definition of Done**:
+- Undo/redo works for 50+ actions without crashes
+- Action descriptions accurate and helpful
+- Stack memory not exceeded (500MB limit)
+- Undo/redo responsive (<100ms)
+- Handles corrupted state gracefully (revert to last valid state)
+
+**Complexity**: Complex (state management, history stack, memory limits)
+
+**Phase**: 7 (Keyboard Shortcuts & Polish)
+
+**Priority**: ⚡ STRETCH GOAL
+
+---
+
+### Story S22: Enhanced Auto-Save & Project Recovery
+
+**As a** editor
+**I want** automatic saving of my project state and recovery from app crashes
+**So that** I don't lose work if the app unexpectedly crashes or closes
+
+**User Value**: Peace of mind; no data loss on crashes; faster recovery.
+
+**Acceptance Criteria**:
+
+- [ ] **AC-1**: Auto-save interval: every 30 seconds (configurable 10-120 seconds)
+- [ ] **AC-2**: Save to `app.getPath('userData')/autosave.json`
+- [ ] **AC-3**: Saved state includes: clips, timeline, trim points, effects, text, zoom level
+- [ ] **AC-4**: On app launch, detect incomplete autosave (crash indicator)
+- [ ] **AC-5**: Recovery dialog: "Recover previous session?" or "Start fresh?"
+- [ ] **AC-6**: User selects Recover → full state restored including undo history
+- [ ] **AC-7**: User selects Start Fresh → blank timeline
+- [ ] **AC-8**: Manual project save as `.klippy` file (JSON format) - Post-MVP feature
+- [ ] **AC-9**: Load project from `.klippy` file - Post-MVP feature
+- [ ] **AC-10**: Project includes: clips, timeline layout, effects, text, user notes
+- [ ] **AC-11**: Option in Preferences: "Clear session on quit"
+- [ ] **AC-12**: Option in Preferences: "Auto-delete autosave after 7 days"
+- [ ] **AC-13**: Handle corrupted autosave file gracefully (log error, offer start fresh)
+- [ ] **AC-14**: Handle disk full: warn user, attempt cleanup of old autosaves
+
+**Definition of Done**:
+- App crash recovery tested: kill process → relaunch → state restored
+- Autosave frequency accurate (verified via timestamps)
+- Corrupted autosave handled without crash
+- Recovery dialog UX clear and intuitive
+- No data loss during save operation
+
+**Complexity**: Medium (state serialization, file I/O, error handling)
+
+**Phase**: 7 (Keyboard Shortcuts & Polish)
+
+**Priority**: ⚡ STRETCH GOAL
+
+**Depends On**: MVP Session State Persistence
+
+---
+
+## Dependency Graph
+
+```
+ollo MVP Complete (S1-S8: Import, Timeline, Trim, Export, Session Persist)
+  ├─→ S9 (Screen Recording) ─────────┐
+  │                                   ├─→ S11 (PiP Recording)
+  ├─→ S10 (Webcam Recording) ────────┘
+  │
+  ├─→ S12 (Advanced Timeline: Multi-Track)
+  │     ├─→ S17 (Filters & Effects)
+  │     │     ├─→ S18 (Transitions)
+  │     │     └─→ S19 (Text Overlays)
+  │     └─→ S13 (Split & Advanced Trim)
+  │
+  ├─→ S14 (Advanced Export Options)
+  │
+  ├─→ S15 (Audio Capture & Controls) ──→ S16 (Audio Effects: Fade, Normalize)
+  │
+  ├─→ S20 (Keyboard Shortcuts)
+  │
+  ├─→ S21 (Undo/Redo System)
+  │
+  └─→ S22 (Enhanced Auto-Save & Recovery) [depends on MVP S8]
 ```
 
 ---
 
-## User Interface
+## Implementation Order (Recommended)
 
-### Layout Structure
+### Phase 5 Build Order (REQUIRED - Core Features)
+1. **S9**: Screen Recording (enables use case: record tutorials)
+2. **S10**: Webcam Recording (enables use case: record vlogs)
+3. **S11**: PiP Recording (combines S9+S10 for talking-head tutorials)
+4. **S12**: Advanced Timeline (foundational for layering; blocks S17-S19)
+5. **S13**: Split & Advanced Trim (completes timeline editing capabilities)
+6. **S14**: Advanced Export (enables resolution/platform optimization)
+7. **S15**: Audio Capture & Controls (required for recording features; enables audio adjustment)
 
-Three-panel design:
-- Left: Library panel (20% width)
-- Center: Preview player (40% width) 
-- Bottom: Timeline (full width, 30% height)
+### Phase 6 Build Order (STRETCH - Polish Features)
+8. **S16**: Audio Effects (builds on S15; optional enhancement)
+9. **S17**: Video Filters & Effects (builds on S12; required for S18-S19)
+10. **S18**: Transitions (builds on S17; enhances clip sequencing)
+11. **S19**: Text Overlays (builds on S12; adds title/caption capability)
 
-### UI Requirements
-
-- Minimum window size: 1280x720
-- Three-panel layout (Library 20%, Preview 40%, Timeline 30%)
-- Loading states for import/export operations
-- Clean, minimal design
-- Dark theme preferred
-
-### Visual Design
-
-**Colors** (suggested):
-- Background: #1a1a1a (dark gray)
-- Panel borders: #333333
-- Selected clip: #0066cc (blue highlight)
-- Playhead: #ff0000 (red)
-- Buttons: #0066cc (primary), #666666 (secondary)
-- Text: #ffffff (white), #999999 (gray for metadata)
-
-**Typography**:
-- Sans-serif system font (SF Pro on macOS)
-- Sizes: 16px body, 14px metadata, 12px timestamps
-
-**Spacing**:
-- 16px padding inside panels
-- 8px margin between UI elements
-- 4px gap between timeline clips
+### Phase 7 Build Order (STRETCH - QoL Features)
+12. **S20**: Keyboard Shortcuts (pure QoL; can be done anytime)
+13. **S21**: Undo/Redo (builds on MVP; enhances user confidence)
+14. **S22**: Enhanced Auto-Save (builds on MVP S8; improves reliability)
 
 ---
 
-## Technical Architecture
+## Phasing Summary
 
-### Tech Stack
+### Phase 5: Recording & Advanced Editing (REQUIRED)
+- 5 Features (S9-S13 core + S15 audio)
+- Delivery: Full recording and advanced timeline capability
+- Target: Features that unlock new user workflows (screen recording, PiP, multi-track)
 
-**Core**:
-- Electron (latest stable)
-- React 18+
-- TypeScript 4.5+
-- Vite 5+ (build tool)
-- Electron Forge (for building/packaging)
+### Phase 6: Effects & Advanced Export (MIXED)
+- 2 REQUIRED (S14, S15), 4 STRETCH (S16-S19)
+- REQUIRED: Advanced export and audio controls (complete MVP → Full submission)
+- STRETCH: Effects and transitions (polish)
 
-**Dependencies**:
-- `ffmpeg-static` - Bundled FFmpeg binary
-- `uuid` - Unique clip IDs
-- `electron-store` - Simple data persistence (alternative to manual JSON handling)
-- `@types/react`, `@types/react-dom` - TypeScript definitions
-
-**Architecture Pattern**:
-- Context Isolation enabled (security best practice)
-- Preload script with contextBridge for IPC
-- Hot-reload enabled for development with Vite
-- TypeScript for type safety
-
-### Project Structure
-
-```
-gauntlet-03e/
-├── src/
-│   ├── main/              # Electron main process (TypeScript)
-│   │   ├── index.ts       # Main entry point
-│   │   ├── ffmpeg.ts      # FFmpeg operations
-│   │   ├── fileSystem.ts  # File handling & auto-save
-│   │   └── ipcHandlers.ts # IPC event handlers
-│   ├── preload/           # Preload script (IPC bridge)
-│   │   └── index.ts       # contextBridge API
-│   └── renderer/          # React app (TypeScript)
-│       ├── App.tsx
-│       ├── index.tsx
-│       ├── types/
-│       │   └── electron.d.ts  # Type definitions for window.electron
-│       ├── components/
-│       │   ├── Library.tsx
-│       │   ├── Timeline.tsx
-│       │   ├── VideoPlayer.tsx
-│       │   └── ExportDialog.tsx
-│       ├── hooks/
-│       │   └── useAutoSave.ts
-│       └── styles/
-│           └── main.css
-├── package.json
-├── tsconfig.json
-├── forge.config.ts
-├── vite.main.config.ts
-├── vite.preload.config.ts
-├── vite.renderer.config.ts
-└── README.md
-```
-
-### Electron IPC API
-
-**Preload Script (contextBridge API)**:
-```typescript
-// src/preload/index.ts
-import { contextBridge, ipcRenderer } from 'electron';
-
-contextBridge.exposeInMainWorld('electron', {
-  // File operations
-  selectFiles: () => ipcRenderer.invoke('file:select'),
-  getMetadata: (filePath: string) => ipcRenderer.invoke('file:getMetadata', filePath),
-  getThumbnail: (filePath: string) => ipcRenderer.invoke('file:getThumbnail', filePath),
-  
-  // Export operations
-  startExport: (clips: TimelineClip[], outputPath: string) => 
-    ipcRenderer.invoke('export:start', clips, outputPath),
-  onExportProgress: (callback: (progress: number) => void) => 
-    ipcRenderer.on('export:progress', (_event, progress) => callback(progress)),
-  
-  // Auto-save operations
-  saveProject: (state: ProjectState) => ipcRenderer.invoke('autosave:save', state),
-  loadProject: () => ipcRenderer.invoke('autosave:load'),
-  deleteAutosave: () => ipcRenderer.invoke('autosave:delete'),
-  
-  // Utility
-  revealFile: (filePath: string) => ipcRenderer.invoke('app:revealFile', filePath),
-});
-```
-
-**Type Definitions (for React/TypeScript)**:
-```typescript
-// src/renderer/types/electron.d.ts
-export interface ElectronAPI {
-  selectFiles: () => Promise<string[]>;
-  getMetadata: (filePath: string) => Promise<VideoMetadata>;
-  getThumbnail: (filePath: string) => Promise<string>;
-  startExport: (clips: TimelineClip[], outputPath: string) => Promise<void>;
-  onExportProgress: (callback: (progress: number) => void) => void;
-  saveProject: (state: ProjectState) => Promise<void>;
-  loadProject: () => Promise<ProjectState | null>;
-  deleteAutosave: () => Promise<void>;
-  revealFile: (filePath: string) => Promise<void>;
-}
-
-declare global {
-  interface Window {
-    electron: ElectronAPI;
-  }
-}
-```
-
-### Video Processing
-
-**File Handling**:
-- Store file paths (not contents) in React state
-- Video playback via native HTML5 `<video>` element with file:// URLs
-
-**Metadata Extraction**:
-- Use FFmpeg to extract duration, resolution, framerate, codec
-- Extract first frame as JPEG thumbnail
-- Cache thumbnails in temp directory
-
-**Trim Implementation**:
-- Store trim data as {startTime, endTime} per clip
-- Apply trims during export using FFmpeg -ss and -t flags
-
-**Export Pipeline**:
-1. Generate FFmpeg command for each clip (trim + convert)
-2. Concatenate clips using FFmpeg concat demuxer
-3. Re-encode with consistent codec settings
-4. Parse FFmpeg stderr for progress updates
-
-**State Structure**:
-```typescript
-// Type definitions
-interface VideoMetadata {
-  width: number;
-  height: number;
-  framerate: number;
-  codec: string;
-}
-
-interface VideoClip {
-  id: string;
-  path: string;
-  filename: string;
-  duration: number;
-  thumbnail: string;
-  metadata: VideoMetadata;
-}
-
-interface TimelineClip {
-  id: string;
-  libraryClipId: string; // reference to library clip
-  trimStart: number;
-  trimEnd: number;
-  order: number;
-}
-
-interface ProjectState {
-  library: VideoClip[];
-  timeline: TimelineClip[];
-  selectedClipId: string | null;
-  currentPlayheadPosition: number; // seconds
-  isExporting: boolean;
-  exportProgress: number;
-  lastAutoSave: number; // timestamp for tracking auto-save
-  timelineZoom: number; // 1.0 to 10.0 (100% to 1000%)
-  timelineScrollPosition: number; // pixels from left
-  timelineWidth: number; // calculated based on zoom
-}
-```
-
-**Auto-Save Implementation**:
-- Use setInterval to trigger save every 30 seconds
-- Serialize state to JSON and write to file system via Electron IPC
-- On app start, check for autosave file and prompt user to restore
+### Phase 7: Polish & Reliability (STRETCH)
+- 3 STRETCH (S20-S22)
+- QoL: Keyboard shortcuts, undo/redo, crash recovery
 
 ---
 
-## Implementation Phases
+## Notes for Implementation Team
 
-### Phase 1: Project Setup COMPLETE
-- Initialize Electron Forge project with Vite + TypeScript template
-- Install dependencies: React, ffmpeg-static, uuid
-- Set up basic app window and three-panel layout
-- Configure TypeScript for React
-- Confirm FFmpeg binary is accessible from main process
-- Set up IPC communication with contextBridge pattern
-- Validation: App launches with empty UI and three panels visible
+1. **Prioritize REQUIRED Features First**: S9-S15 block final submission. Get these done before stretching.
 
-**Prerequisites to install before starting**:
-- Node.js v18+ (check with `node --version`)
-- npm v9+ (check with `npm --version`)
-- Git (check with `git --version`)
-- Xcode Command Line Tools (for macOS)
+2. **Dependency Respect**: Don't start S11 until S9+S10 done. Don't start S18 until S17 done, etc.
 
-**Initial commands**:
-```bash
-npm create @electron-forge/app@latest ollo -- --template=vite-typescript
-cd ollo
-npm install react react-dom
-npm install -D @types/react @types/react-dom
-npm install ffmpeg-static uuid
-npm install -D @types/uuid
-npm start  # Launch dev mode
-```
+3. **Testing Gates**: Each story includes specific testing criteria. Verify happy path, edge cases, and error handling before marking "done."
 
-### Phase 2: Import & Library COMPLETE
-- Implement drag-and-drop file import to Library
-- Implement file picker import via IPC
-- Extract video metadata with FFmpeg
-- Generate thumbnail from first frame
-- Display clips in Library panel
-- Show filename and duration on each clip
-- Validation: Can import 3 videos and see them in Library
+4. **Audio is Critical**: S15 (Audio Capture & Controls) is REQUIRED and needed by recording features. Prioritize audio handling and sync.
 
-### Phase 3: Timeline & Drag-to-Reorder COMPLETE
-- Build Timeline panel with drag-and-drop from Library
-- Implement horizontal drag-to-reorder on Timeline
-- Add visual playhead with scrubbing
-- Implement clip snapping (no gaps, no overlaps)
-- Add zoom slider (100%-1000%) with auto-fit
-- Validation: Can drag clips from Library to Timeline and reorder them
+5. **Cross-Platform**: All features tested on macOS (primary) + Windows (best-effort).
 
-### Phase 4: Video Preview COMPLETE
-- Build video player component with HTML5 video tag
-- Load selected clip into player using file:// protocol
-- Implement play/pause toggle
-- Add progress bar with seek functionality
-- Display current time and total duration
-- Implement scrubbing with playhead
-- Validation: Clicking a clip plays it in preview with audio, scrubbing works smoothly
+6. **Performance Benchmarks**: Timeline stays responsive with 10+ clips. Playback ≥30fps. Export completes without crashes.
 
-### Phase 5: Auto-Save & Session Recovery COMPLETE
-- Implement auto-save function (serialize state to JSON)
-- Set up 30-second interval to trigger auto-save
-- Write autosave file to ~/Library/Application Support/ollo/
-- On app launch, check for existing autosave file
-- Show restore dialog if autosave exists and is recent
-- Implement restore function (deserialize JSON, load clips)
-- Implement "Start Fresh" function (delete autosave)
-- Validation: Close app, reopen, and successfully restore session
+7. **Definition of Done**: Each story has specific criteria. Don't merge PR until all acceptance tests pass.
 
-### Phase 6: Trimming COMPLETE
-- [x] Add visual trim handles to clip cards
-- [x] Implement drag logic for trim handles
-- [x] Update clip state with new trim start/end times
-- [x] Prevent handles from crossing (min duration check)
-- [x] Update duration display when trimming
-- [x] Preview reflects trimmed clip in player
-- [x] Validation: Can trim start/end of clips, preview shows trimmed version
-
-### Phase 7: Sequence Preview COMPLETE
-- Implement "Preview Sequence" mode
-- Stitch clips together for preview
-- Handle transitions between clips smoothly
-- Maintain audio sync across clips
-- Validation: Sequence plays all clips in order with audio
-
-### Phase 8: Export COMPLETE
-- Build FFmpeg export command generator
-- Implement trim application (per-clip -ss and -t)
-- Implement clip concatenation (concat demuxer)
-- Add progress tracking (parse FFmpeg stderr)
-- Show progress bar during export
-- Open file picker to choose save location
-- Display success/error messages
-- Add "Reveal in Finder" button
-- Validation: Export produces playable MP4 with all clips in sequence
-
-### Phase 9: Polish & Testing PUSHED TO LATER
-- Test with different video formats (MP4, MOV)
-- Test with videos of different resolutions
-- Test edge cases (very short clips, very long clips)
-- Add loading states for async operations
-- Improve error messages
-- Final UI polish (spacing, colors, alignment)
-- Validation: Complete end-to-end test
-
-### Phase 10: Build & Package COMPLETE
-- Configure Electron Forge for macOS packaging
-- Bundle FFmpeg binary with app
-- Create simple app icon (lowercase "ollo" text)
-- Test built app (not dev mode)
-- Verify exported videos work outside the app
-- Validation: Native .app file launches and exports video successfully
-
-**Testing Notes**: Use real video files throughout development, test early and often
+8. **Tech Stack**: Electron + Vite + React + TypeScript + FFmpeg (as established in MVP)
 
 ---
 
-## Testing Requirements
-
-### Performance Targets
-- Timeline UI: <50ms response time for drag operations
-- Preview playback: 30fps minimum
-- Export: <5 minutes for 2-minute 1080p video
-- App launch: <5 seconds
-- Memory: <1GB RAM with 10 clips, <100MB variance over 15min
-- File size: ~35-40MB for 1080p 1min video (5Mbps bitrate)
-
-### Platform Support
-- Primary: macOS (Apple Silicon + Intel)
-- Windows: Out of scope for MVP
-- Linux: Out of scope for MVP
-
-### Integration Test
-- Import 3 clips (H.264 MP4, 1080p)
-- Drag to Timeline, trim to 2 minutes total
-- Export and verify playback in external player
-
----
-
-## Known Limitations (Acceptable for MVP)
-
-1. No manual project save/load (only auto-save/restore)
-2. Fixed export settings (30fps, max 1080p)
-3. No undo/redo
-4. Limited format support (MP4 and MOV only)
-5. No audio mixing (original volume only)
-6. Sequential timeline only (no overlapping clips)
-7. Basic trim only (no ripple edits)
-8. Export time varies with video size
-9. Memory usage with many/large clips
-10. macOS only (no Windows/Linux support for MVP)
-11. Auto-save only keeps most recent session (no version history)
-
----
-
-## FFmpeg Command Reference
-
-**Extract metadata:**
-```bash
-ffmpeg -i input.mp4 2>&1 | grep "Duration\|Video\|Audio"
-```
-
-**Extract thumbnail:**
-```bash
-ffmpeg -i input.mp4 -ss 00:00:01 -vframes 1 thumbnail.jpg
-```
-
-**Trim video:**
-```bash
-ffmpeg -ss 00:00:10 -i input.mp4 -t 00:00:05 -c copy output.mp4
-```
-
-**Concatenate videos:**
-```bash
-# Create file list: list.txt
-file 'clip1.mp4'
-file 'clip2.mp4'
-file 'clip3.mp4'
-
-# Concatenate
-ffmpeg -f concat -safe 0 -i list.txt -c copy output.mp4
-```
-
-
-## React Code Patterns (TypeScript)
-
-**Video playback with trim**:
-```typescript
-const videoRef = useRef<HTMLVideoElement>(null);
-
-useEffect(() => {
-  if (videoRef.current) {
-    videoRef.current.currentTime = trimStart;
-  }
-}, [trimStart]);
-
-const handleTimeUpdate = () => {
-  if (videoRef.current && videoRef.current.currentTime >= trimEnd) {
-    videoRef.current.pause();
-  }
-};
-```
-
-**Drag and drop**:
-```typescript
-const handleDrop = async (e: React.DragEvent) => {
-  e.preventDefault();
-  const files = Array.from(e.dataTransfer.files);
-  const videoFiles = files.filter(file => 
-    file.type.startsWith('video/') && 
-    (file.name.endsWith('.mp4') || file.name.endsWith('.mov'))
-  );
-  
-  for (const file of videoFiles) {
-    const metadata = await window.electron.getMetadata(file.path);
-    setLibrary(prev => [...prev, { ...metadata, id: uuid() }]);
-  }
-};
-```
-
----
-
-## Manual Testing Protocol
-
-**Setup**: Prepare 3 test videos (short 1080p MP4, medium 720p MOV, long 4K MP4), ensure 10GB+ free space, use built app
-
-**Demo Script (20 minutes)**:
-1. **Launch & Import (5 min)**: Launch app, drag 3 videos to Library, verify Library display
-2. **Timeline Features (10 min)**: Drag clips to Timeline, test zoom slider (100%-1000%), trim clips, drag-to-reorder, preview sequence
-3. **Export & Recovery (5 min)**: Export MP4, close/reopen app, restore session, verify in external player
-
-## Definition of Done
-
-The MVP is complete and shippable when you can demonstrate:
-
-1. Launch the packaged desktop app (ollo.app on Mac)
-2. Import 3 different video files via drag-and-drop to Library
-3. Drag clips from Library to Timeline
-4. Reorder clips by dragging horizontally on Timeline
-5. Trim the start and end of each clip
-6. Trim each clip by dragging handles
-7. Preview clips and sequence with visual playhead and scrubbing
-8. Export to MP4 with mixed resolution handling
-9. The exported video plays correctly in external player
-10. Close and reopen app - session restores successfully
-11. Timeline zoom slider works smoothly (100% to 1000%)
-
----
-
-## Technical Decisions Summary
-
-**Why Electron?**
-- Native desktop APIs (file system, dialogs)
-- Mature ecosystem with extensive documentation
-- Electron Forge simplifies development workflow
-- Easy to bundle FFmpeg binary
-- Hot-reload for fast iteration
-
-**Why Vite?**
-- Lightning-fast hot module replacement (HMR)
-- Native ES modules support
-- Faster builds than Webpack
-- Better developer experience
-- Modern tooling for 2025
-
-**Why TypeScript?**
-- Type safety catches errors at compile time
-- Better IDE autocomplete and IntelliSense
-- Easier refactoring and maintenance
-- Industry standard for modern React apps
-- Improved documentation through types
-
-**Why bundled FFmpeg?**
-- No dependency on system FFmpeg installation
-- Consistent behavior across all machines
-- Simpler distribution
-- ~60MB bundle size increase is acceptable
-
-**Why HTML5 video player?**
-- Simple, no extra dependencies
-- Native browser support
-- Perfect for MVP needs
-- Can upgrade later if needed
-
-**Why Context Isolation?**
-- Security best practice
-- Required for modern Electron apps
-- Prevents direct Node.js access from renderer
-- contextBridge provides safe IPC pattern
-
----
+**Document Status**: Ready for Development
+**Next Step**: Create detailed PRDs for each story (in dependency order)

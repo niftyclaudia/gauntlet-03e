@@ -270,6 +270,8 @@ export function generateTrimCommand(
   // This ensures all segments are identical for concat demuxer
   if (settings) {
     // Scale and pad to exact target resolution
+    // First scale to fit within target dimensions while maintaining aspect ratio
+    // Then pad to exact target dimensions
     const videoFilter = `scale=${settings.width}:${settings.height}:force_original_aspect_ratio=decrease,pad=${settings.width}:${settings.height}:(ow-iw)/2:(oh-ih)/2:color=black`;
     args.push('-vf', videoFilter);
     args.push('-r', settings.framerate.toString()); // Set frame rate
@@ -444,6 +446,28 @@ export function calculateExportSettings(
       targetHeight = Math.round(maxWidth / firstAspectRatio);
     }
   }
+  
+  // Ensure target dimensions are not smaller than source dimensions
+  // This prevents FFmpeg padding errors
+  for (const clip of sortedClips) {
+    const libraryClip = libraryClips.find(lc => lc.id === clip.libraryClipId);
+    if (libraryClip) {
+      targetWidth = Math.max(targetWidth, libraryClip.metadata.width);
+      targetHeight = Math.max(targetHeight, libraryClip.metadata.height);
+    }
+  }
+  
+  console.log(`[FFmpeg] Export settings calculated:`, {
+    maxWidth,
+    maxHeight,
+    targetWidth,
+    targetHeight,
+    clips: sortedClips.map(clip => {
+      const libClip = libraryClips.find(lc => lc.id === clip.libraryClipId);
+      return libClip ? { width: libClip.metadata.width, height: libClip.metadata.height } : null;
+    })
+  });
+  
   const videoBitrate = Math.max(2, Math.min(8, (targetWidth * targetHeight) / 414720));
   return {
     format: 'mp4',
@@ -545,4 +569,85 @@ export async function exportVideoSequence(
   } finally {
     cleanupTempFiles(tempFiles);
   }
+}
+
+/**
+ * Convert WebM file to MP4 H.264 format
+ * Used for screen recording conversion after MediaRecorder stops
+ * 
+ * @param inputPath - Path to input WebM file
+ * @param outputPath - Path to output MP4 file
+ * @returns Promise<void>
+ * @throws Error if conversion fails
+ */
+export async function convertWebmToMp4(inputPath: string, outputPath: string): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!ffmpegPath) {
+      reject(new Error('FFmpeg binary not found'));
+      return;
+    }
+
+    if (!fs.existsSync(inputPath)) {
+      reject(new Error(`Input file not found: ${inputPath}`));
+      return;
+    }
+
+    console.log(`[FFmpeg] Converting WebM to MP4: ${inputPath} -> ${outputPath}`);
+
+    // FFmpeg command to convert WebM to H.264 MP4
+    // -c:v libx264: Use H.264 video codec
+    // -preset medium: Encoding speed vs quality balance
+    // -crf 23: Quality setting (lower = better quality, 18-28 is reasonable range)
+    // -r 30: Set frame rate to 30fps
+    // -c:a aac: Use AAC audio codec
+    // -b:a 128k: Audio bitrate
+    // -pix_fmt yuv420p: Ensure compatibility
+    // -movflags +faststart: Enable fast start (streaming-friendly)
+    const ffmpeg = spawn(ffmpegPath, [
+      '-i', inputPath,
+      '-c:v', 'libx264',
+      '-preset', 'medium',
+      '-crf', '23',
+      '-r', '30',
+      '-c:a', 'aac',
+      '-b:a', '128k',
+      '-pix_fmt', 'yuv420p',
+      '-movflags', '+faststart',
+      '-y', // Overwrite output if exists
+      outputPath
+    ]);
+
+    let stderr = '';
+
+    ffmpeg.stderr.on('data', (data) => {
+      stderr += data.toString();
+      // Could parse progress here if needed
+    });
+
+    // Set timeout for conversion (60 seconds as per PRD)
+    const timeout = setTimeout(() => {
+      ffmpeg.kill();
+      reject(new Error('FFmpeg conversion timeout (60 seconds exceeded)'));
+    }, 60000);
+
+    ffmpeg.on('close', (code) => {
+      clearTimeout(timeout);
+      if (code === 0) {
+        if (fs.existsSync(outputPath)) {
+          const stats = fs.statSync(outputPath);
+          console.log(`[FFmpeg] WebM to MP4 conversion completed: ${outputPath} (${stats.size} bytes)`);
+          resolve();
+        } else {
+          reject(new Error('FFmpeg conversion completed but output file not found'));
+        }
+      } else {
+        reject(new Error(`FFmpeg conversion failed with code ${code}: ${stderr.slice(-500)}`));
+      }
+    });
+
+    ffmpeg.on('error', (error) => {
+      clearTimeout(timeout);
+      reject(new Error(`FFmpeg process error: ${error.message}`));
+    });
+  });
 }

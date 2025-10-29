@@ -6,6 +6,7 @@
  */
 
 import { VideoMetadata, SavedProjectState, TimelineClip, VideoClip } from '../../types/video';
+import { ScreenInfo } from '../../types/recording';
 
 export interface ElectronAPI {
   /**
@@ -149,6 +150,87 @@ export interface ElectronAPI {
    * @returns Promise<void>
    */
   revealInFinder: (filePath: string) => Promise<void>;
+
+  /**
+   * Screen recording API
+   */
+  recording: {
+    /**
+     * Get available screens for recording
+     * @returns Promise with screens array or error
+     */
+    getScreens: () => Promise<{ screens: ScreenInfo[]; error?: string }>;
+
+    /**
+     * Start recording session
+     * @param screenSourceId - Screen source ID from desktopCapturer
+     * @param audioEnabled - Whether microphone audio is enabled
+     * @returns Promise with success status and sessionId
+     */
+    startRecording: (
+      screenSourceId: string,
+      audioEnabled: boolean
+    ) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
+
+    /**
+     * Stop recording and convert to MP4
+     * @param sessionId - Recording session ID
+     * @returns Promise with success status, filePath, and duration
+     */
+    stopRecording: (
+      sessionId: string
+    ) => Promise<{ success: boolean; filePath?: string; duration?: number; error?: string }>;
+
+    /**
+     * Cancel recording and cleanup
+     * @param sessionId - Recording session ID
+     * @returns Promise with success status
+     */
+    cancelRecording: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
+
+    /**
+     * Get audio level (0-100)
+     * @param sessionId - Recording session ID
+     * @returns Promise with audio level
+     */
+    getAudioLevel: (sessionId: string) => Promise<{ level: number }>;
+
+    /**
+     * Listen to elapsed time updates (every 100ms during recording)
+     * @param callback - Callback function receiving seconds and sessionId
+     * @returns Cleanup function to remove listener
+     */
+    onElapsedTime: (callback: (data: { seconds: number; sessionId: string }) => void) => (() => void);
+
+    /**
+     * Listen to recording state changes
+     * @param callback - Callback function receiving state and sessionId
+     * @returns Cleanup function to remove listener
+     */
+    onStateChanged: (callback: (data: { state: string; sessionId: string }) => void) => (() => void);
+
+    /**
+     * Listen to audio level updates (every 200ms during recording)
+     * @param callback - Callback function receiving level (0-100)
+     * @returns Cleanup function to remove listener
+     */
+    onAudioLevel: (callback: (level: number) => void) => (() => void);
+
+    /**
+     * Listen to recording errors
+     * @param callback - Callback function receiving error message and sessionId
+     * @returns Cleanup function to remove listener
+     */
+    onError: (callback: (data: { message: string; sessionId: string }) => void) => (() => void);
+
+    /**
+     * Listen to recording completion
+     * @param callback - Callback function receiving filePath, duration, and sessionId
+     * @returns Cleanup function to remove listener
+     */
+        onComplete: (callback: (data: { filePath: string; duration: number; sessionId: string }) => void) => (() => void);
+        writeRecordingFile: (sessionId: string, data: ArrayBuffer | string) => Promise<{ success: boolean; error?: string }>;
+      };
 }
 
 declare global {

@@ -39,6 +39,10 @@ export interface VideoClip {
   metadata: VideoMetadata;
   /** Import timestamp (Date.now()) */
   importedAt: number;
+  /** Source of the clip - 'import' or 'recording' */
+  source?: 'import' | 'recording';
+  /** Timestamp when recorded (if source is 'recording') */
+  recordedAt?: number;
 }
 
 /**
