@@ -6,7 +6,7 @@
  * This service manages session state, screen enumeration, and file operations.
  */
 
-import { desktopCapturer, app } from 'electron';
+import { desktopCapturer, app, screen as electronScreen } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
@@ -43,6 +43,13 @@ export async function getAvailableScreens(): Promise<ScreenInfo[]> {
   try {
     console.log(`[ScreenRecording] Requesting screen sources...`);
     
+    // Get actual screen displays to get real resolutions
+    const displays = electronScreen.getAllDisplays();
+    console.log(`[ScreenRecording] Found ${displays.length} physical display(s)`);
+    displays.forEach((display, idx) => {
+      console.log(`[ScreenRecording] Display ${idx + 1}: ${display.bounds.width}x${display.bounds.height} at (${display.bounds.x}, ${display.bounds.y})`);
+    });
+    
     // Get screens only (exclude windows) with larger thumbnail size for better quality
     const sources = await desktopCapturer.getSources({
       types: ['screen'],
@@ -56,8 +63,37 @@ export async function getAvailableScreens(): Promise<ScreenInfo[]> {
     
     for (let index = 0; index < sources.length; index++) {
       const source = sources[index];
-      const thumbnailSize = source.thumbnail.getSize();
-      console.log(`[ScreenRecording] Screen ${index + 1}: ${source.name}, thumbnail size: ${thumbnailSize.width}x${thumbnailSize.height}`);
+      const thumbnailSizeObj = source.thumbnail.getSize();
+      
+      // Check if thumbnail size is valid
+      console.log(`[ScreenRecording] Screen ${index + 1}: ${source.name}`);
+      console.log(`[ScreenRecording] Source ID: ${source.id}`);
+      console.log(`[ScreenRecording] Thumbnail size object:`, thumbnailSizeObj);
+      
+      // Try to match this source to a physical display
+      let width = 320;
+      let height = 240;
+      
+      // First, try to get dimensions from thumbnail size
+      const thumbWidth = (thumbnailSizeObj as any).width || thumbnailSizeObj.width;
+      const thumbHeight = (thumbnailSizeObj as any).height || thumbnailSizeObj.height;
+      
+      if (thumbWidth && thumbHeight && thumbWidth > 0 && thumbHeight > 0) {
+        width = thumbWidth;
+        height = thumbHeight;
+        console.log(`[ScreenRecording] Using thumbnail dimensions: ${width}x${height}`);
+      } else {
+        // Try to match source to a physical display
+        // Source names like "Screen 1" or displays by index
+        const displayIndex = sources.length > 1 ? index : 0;
+        if (displays[displayIndex]) {
+          width = displays[displayIndex].bounds.width;
+          height = displays[displayIndex].bounds.height;
+          console.log(`[ScreenRecording] Using display dimensions from display ${displayIndex}: ${width}x${height}`);
+        } else {
+          console.log(`[ScreenRecording] Using fallback dimensions: ${width}x${height}`);
+        }
+      }
       
       // Enhanced thumbnail generation with multiple strategies
       let thumbnailDataUrl: string = '';
@@ -149,7 +185,9 @@ export async function getAvailableScreens(): Promise<ScreenInfo[]> {
       }
       
       // Use thumbnail size as resolution (it should match the actual screen resolution)
-      const resolutionStr = `${thumbnailSize.width}x${thumbnailSize.height}`;
+      const resolutionStr = `${width}x${height}`;
+      
+      console.log(`[ScreenRecording] Final resolution string for screen ${index + 1}: "${resolutionStr}"`);
       
       screens.push({
         id: source.id,
@@ -157,6 +195,8 @@ export async function getAvailableScreens(): Promise<ScreenInfo[]> {
         resolution: resolutionStr,
         thumbnail: thumbnailDataUrl
       });
+      
+      console.log(`[ScreenRecording] Added screen ${index + 1} with resolution: "${screens[screens.length - 1].resolution}"`);
     }
 
     console.log(`[ScreenRecording] Processed ${screens.length} screen(s) with thumbnails`);

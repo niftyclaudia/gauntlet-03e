@@ -651,3 +651,107 @@ export async function convertWebmToMp4(inputPath: string, outputPath: string): P
     });
   });
 }
+
+/**
+ * Compose Picture-in-Picture video with overlay
+ * 
+ * Takes screen recording and webcam recording, and overlays webcam on screen
+ * using FFmpeg's overlay filter
+ * 
+ * @param screenFile - Path to screen recording video file
+ * @param webcamFile - Path to webcam recording video file
+ * @param outputFile - Path where composed video will be saved
+ * @param settings - PiP settings (position, size, shape)
+ * @returns Promise that resolves when composition is complete
+ */
+export function composePiPVideo(
+  screenFile: string,
+  webcamFile: string,
+  outputFile: string,
+  settings: {
+    position: 'TL' | 'TR' | 'BL' | 'BR';
+    size: 'small' | 'medium' | 'large';
+    shape: 'rectangle' | 'circle';
+    audioMode?: 'both' | 'screen-only' | 'webcam-only';
+  }
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    if (!ffmpegPath) {
+      reject(new Error('FFmpeg binary not available'));
+      return;
+    }
+
+    // Size multipliers
+    const sizeMultiplier = settings.size === 'small' ? 0.2 : settings.size === 'medium' ? 0.3 : 0.4;
+
+    // Build overlay filter
+    // Scale webcam to appropriate size, then overlay on screen
+    let filterComplex = `[1:v]scale=iw*${sizeMultiplier}:ih*${sizeMultiplier}[webcam_scaled]`;
+    
+    // Calculate position
+    let overlayX = 10; // Default padding
+    let overlayY = 10; // Default padding
+    
+    if (settings.position === 'TR' || settings.position === 'BR') {
+      overlayX = 'main_w-overlay_w-10'; // Right side
+    }
+    if (settings.position === 'BL' || settings.position === 'BR') {
+      overlayY = 'main_h-overlay_h-10'; // Bottom
+    }
+    
+    filterComplex += `;[0:v][webcam_scaled]overlay=${overlayX}:${overlayY}[v]`;
+
+    const args = [
+      '-i', screenFile,
+      '-i', webcamFile,
+      '-filter_complex', filterComplex,
+      '-map', '[v]',
+    ];
+
+    // Handle audio based on audioMode setting
+    // Note: Screen audio is not available (desktop audio not captured)
+    // So we only map webcam audio regardless of setting
+    args.push('-map', '1:a?'); // Webcam audio (optional)
+
+    args.push(
+      '-c:v', 'libx264',
+      '-c:a', 'aac',
+      '-preset', 'ultrafast',
+      '-crf', '23',
+      '-y', // Overwrite output file if exists
+      outputFile
+    );
+
+    console.log('[FFmpeg] Composing PiP video:', {
+      screenFile,
+      webcamFile,
+      outputFile,
+      settings,
+      args
+    });
+
+    const ffmpeg = spawn(ffmpegPath, args);
+    let stderr = '';
+
+    ffmpeg.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    ffmpeg.on('close', (code) => {
+      if (code === 0) {
+        if (fs.existsSync(outputFile)) {
+          console.log('[FFmpeg] PiP composition complete:', outputFile);
+          resolve();
+        } else {
+          reject(new Error('PiP composition completed but output file not found'));
+        }
+      } else {
+        reject(new Error(`PiP composition failed with code ${code}: ${stderr.slice(-500)}`));
+      }
+    });
+
+    ffmpeg.on('error', (error) => {
+      reject(new Error(`FFmpeg process error: ${error.message}`));
+    });
+  });
+}
