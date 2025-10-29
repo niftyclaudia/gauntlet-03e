@@ -1,9 +1,31 @@
-# Klippy - User Stories & Feature Breakdown
+# ollo - User Stories & Feature Breakdown
 
 **Document Version**: 1.0
-**Date**: October 28, 2025
-**Product**: Klippy Desktop Video Editor (Post-MVP Features)
-**Total Stories**: 13 (7 REQUIRED + 6 STRETCH GOALS)
+**Product**: ollo Desktop Video Editor (Post-MVP Features)
+**Total Stories**: 14 (7 REQUIRED + 7 STRETCH GOALS)
+
+---
+
+## MVP Status
+
+**✅ MVP COMPLETE** - All 8 core features implemented and tested:
+- ✅ Video import (MP4/MOV) with drag-and-drop
+- ✅ Library panel with thumbnails and duration
+- ✅ Timeline with drag-and-drop sequencing
+- ✅ Clip trimming with visual handles
+- ✅ Video preview with HTML5 player
+- ✅ MP4 export with H.264/AAC codecs
+- ✅ Auto-save every 30 seconds
+- ✅ Session recovery on app restart
+
+**Ready for Phase 5+ Features** - Post-MVP enhancement stories below.
+
+**Current Implementation Status**:
+- ✅ **Core App**: Electron + Vite + React + TypeScript + FFmpeg
+- ✅ **Components**: Library, VideoPlayer, Timeline, ExportDialog, and supporting UI components
+- ✅ **Hooks**: Auto-save, session restore, file import, export, trim operations
+- ✅ **IPC Handlers**: File system operations, FFmpeg integration, project state management
+- ✅ **Platform**: macOS primary, Windows secondary support
 
 ---
 
@@ -34,7 +56,7 @@
 
 **As a** content creator or educator
 **I want** to record my screen with audio capture
-**So that** I can create tutorials, presentations, and screen-based content without leaving Klippy
+**So that** I can create tutorials, presentations, and screen-based content without leaving ollo
 
 **User Value**: Eliminates need for external screen recording tools; enables one-app workflow for tutorial creation.
 
@@ -72,7 +94,7 @@
 
 **As a** content creator doing face-on-camera content
 **I want** to record my webcam with synchronized microphone audio
-**So that** I can create vlogs, testimonials, and talking-head videos within Klippy
+**So that** I can create vlogs, testimonials, and talking-head videos within ollo
 
 **User Value**: Built-in camera recording removes dependency on separate camera recording software.
 
@@ -591,7 +613,7 @@
 ## Dependency Graph
 
 ```
-MVP Complete (S1-S8: Import, Timeline, Trim, Export, Session Persist)
+ollo MVP Complete (S1-S8: Import, Timeline, Trim, Export, Session Persist)
   ├─→ S9 (Screen Recording) ─────────┐
   │                                   ├─→ S11 (PiP Recording)
   ├─→ S10 (Webcam Recording) ────────┘
@@ -657,7 +679,7 @@ MVP Complete (S1-S8: Import, Timeline, Trim, Export, Session Persist)
 
 ---
 
-## Notes for Caleb (Implementation Agent)
+## Notes for Implementation Team
 
 1. **Prioritize REQUIRED Features First**: S9-S15 block final submission. Get these done before stretching.
 
@@ -667,13 +689,15 @@ MVP Complete (S1-S8: Import, Timeline, Trim, Export, Session Persist)
 
 4. **Audio is Critical**: S15 (Audio Capture & Controls) is REQUIRED and needed by recording features. Prioritize audio handling and sync.
 
-5. **Cross-Platform**: All features tested on Mac (primary) + Windows (best-effort).
+5. **Cross-Platform**: All features tested on macOS (primary) + Windows (best-effort).
 
 6. **Performance Benchmarks**: Timeline stays responsive with 10+ clips. Playback ≥30fps. Export completes without crashes.
 
 7. **Definition of Done**: Each story has specific criteria. Don't merge PR until all acceptance tests pass.
 
+8. **Tech Stack**: Electron + Vite + React + TypeScript + FFmpeg (as established in MVP)
+
 ---
 
 **Document Status**: Ready for Development
-**Next Step**: Pam creates detailed PRD for each story (in dependency order)
+**Next Step**: Create detailed PRDs for each story (in dependency order)
