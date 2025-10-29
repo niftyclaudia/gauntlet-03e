@@ -5,7 +5,7 @@
  * in preload.ts. As IPC handlers are added in future PRs, update this interface.
  */
 
-import { VideoMetadata, SavedProjectState } from '../../types/video';
+import { VideoMetadata, SavedProjectState, TimelineClip, VideoClip } from '../../types/video';
 
 export interface ElectronAPI {
   /**
@@ -112,6 +112,43 @@ export interface ElectronAPI {
       clipDuration: number
     ) => Promise<{ success: boolean; inPoint: number; outPoint: number }>;
   };
+
+  /**
+   * Opens native save dialog for export file
+   * @param defaultFilename - Default filename for export
+   * @returns Promise with file path or null if cancelled
+   */
+  showSaveDialog: (defaultFilename: string) => Promise<string | null>;
+
+  /**
+   * Starts video export process
+   * @param clips - Timeline clips to export
+   * @param libraryClips - Library clips for source files
+   * @param outputPath - Output file path (absolute)
+   * @param projectState - Optional project state for auto-save before export
+   * @returns Promise that resolves when export completes
+   * @throws Error if export fails
+   */
+  exportVideo: (
+    clips: TimelineClip[],
+    libraryClips: VideoClip[],
+    outputPath: string,
+    projectState?: SavedProjectState
+  ) => Promise<void>;
+
+  /**
+   * Listens for export progress events
+   * @param callback - Progress callback (0-100)
+   * @returns Function to remove listener
+   */
+  onExportProgress: (callback: (progress: number) => void) => (() => void);
+
+  /**
+   * Opens macOS Finder to file location
+   * @param filePath - Absolute path to file
+   * @returns Promise<void>
+   */
+  revealInFinder: (filePath: string) => Promise<void>;
 }
 
 declare global {
