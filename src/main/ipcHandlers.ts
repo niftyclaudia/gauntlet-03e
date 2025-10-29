@@ -301,10 +301,10 @@ export function registerIpcHandlers(): void {
         throw new Error(`Invalid trim values: outPoint must be > inPoint (got inPoint=${inPoint}, outPoint=${outPoint})`);
       }
 
-      // Validate minimum duration (0.5 seconds)
+      // Validate minimum duration (1.0 seconds)
       const duration = outPoint - inPoint;
-      if (duration < 0.5) {
-        throw new Error(`Trim duration must be at least 0.5 seconds (got ${duration.toFixed(2)}s)`);
+      if (duration < 1.0) {
+        throw new Error(`Trim duration must be at least 1.0 seconds (got ${duration.toFixed(2)}s)`);
       }
 
       // Validate outPoint <= clipDuration (cannot exceed source clip duration)

@@ -99,6 +99,32 @@ const App: React.FC = () => {
   };
 
   /**
+   * Handle deleting clip from library
+   * Also removes the clip from timeline if it's being used there
+   */
+  const handleDeleteLibraryClip = (clipId: string) => {
+    setLibrary(prev => {
+      const newLibrary = prev.filter(clip => clip.id !== clipId);
+      console.log(`[App] Deleted clip ${clipId} from library. Library now has ${newLibrary.length} clip(s).`);
+      return newLibrary;
+    });
+
+    // Also remove from timeline if it's being used there
+    setTimeline(prev => {
+      const newTimeline = removeClipFromTimeline(clipId, prev);
+      if (newTimeline.length !== prev.length) {
+        console.log(`[App] Also removed clip ${clipId} from timeline. Timeline now has ${newTimeline.length} clip(s).`);
+      }
+      return newTimeline;
+    });
+
+    // Clear selection if deleted clip was selected
+    if (selectedClipId === clipId) {
+      setSelectedClipId(null);
+    }
+  };
+
+  /**
    * Handle clearing all clips from timeline
    * NOTE: This only clears the timeline, NOT the library
    */
@@ -242,6 +268,7 @@ const App: React.FC = () => {
           onImportComplete={handleImportComplete}
           onSelectClip={handleSelectClip}
           selectedClipId={selectedClipId}
+          onDeleteClip={handleDeleteLibraryClip}
         />
         <VideoPlayer
           selectedClipId={selectedClipId}

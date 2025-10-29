@@ -9,6 +9,7 @@ import React, { useState, DragEvent } from 'react';
 import { VideoClip } from '../types/video';
 import LibraryClipCard from './LibraryClipCard';
 import { useFileImport } from '../hooks/useFileImport';
+import { useCountdown } from '../hooks/useCountdown';
 
 interface LibraryProps {
   /** Array of imported clips */
@@ -19,11 +20,17 @@ interface LibraryProps {
   onSelectClip?: (clip: VideoClip) => void;
   /** Currently selected clip ID (for highlighting) */
   selectedClipId?: string | null;
+  /** Callback when clip is deleted */
+  onDeleteClip?: (clipId: string) => void;
 }
 
-const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectClip, selectedClipId }) => {
+const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectClip, selectedClipId, onDeleteClip }) => {
   const [isDragging, setIsDragging] = useState(false);
   const { isImporting, importProgress, handleFileImport, error, warning, clearMessages } = useFileImport();
+  
+  // Countdown timers for auto-dismiss
+  const errorCountdown = useCountdown(5, !!error);
+  const warningCountdown = useCountdown(3, !!warning);
 
   /**
    * Handle file picker button click
@@ -39,6 +46,22 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
       }
     } catch (err) {
       console.error('[Library] File import error:', err);
+    }
+  };
+
+  /**
+   * Handle clip deletion with confirmation
+   */
+  const handleDeleteClip = (clipId: string) => {
+    const clip = library.find(c => c.id === clipId);
+    if (!clip) return;
+
+    const confirmed = window.confirm(
+      `Are you sure you want to delete "${clip.filename}" from the library?\n\nThis will also remove it from the timeline if it's being used there.`
+    );
+
+    if (confirmed && onDeleteClip) {
+      onDeleteClip(clipId);
     }
   };
 
@@ -123,12 +146,18 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
       {/* Error/Warning messages */}
       {error && (
         <div className="toast toast-error" onClick={clearMessages}>
-          {error}
+          <div className="toast-content">
+            <span className="toast-message">{error}</span>
+            <span className="toast-countdown">Auto-dismiss in {errorCountdown.countdown}s</span>
+          </div>
         </div>
       )}
       {warning && (
         <div className="toast toast-warning" onClick={clearMessages}>
-          {warning}
+          <div className="toast-content">
+            <span className="toast-message">{warning}</span>
+            <span className="toast-countdown">Auto-dismiss in {warningCountdown.countdown}s</span>
+          </div>
         </div>
       )}
 
@@ -154,6 +183,7 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
                 clip={clip}
                 onSelect={onSelectClip}
                 isSelected={selectedClipId === clip.id}
+                onDelete={handleDeleteClip}
               />
             ))}
           </div>

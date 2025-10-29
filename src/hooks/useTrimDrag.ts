@@ -6,7 +6,10 @@
  */
 
 import { useState, useCallback } from 'react';
-import { validateTrimStart, validateTrimEnd, pixelsToTime } from '../utils/trimCalculations';
+import { validateTrimStart, validateTrimEnd } from '../utils/trimCalculations';
+
+/** Minimum clip duration in seconds (must match trimCalculations.ts) */
+const MIN_CLIP_DURATION = 1.0;
 
 export interface TrimDragState {
   /** Clip ID being trimmed */
@@ -42,6 +45,10 @@ export interface UseTrimDragReturn {
   tooltipPosition: { x: number; y: number };
   /** Whether tooltip should be visible */
   tooltipVisible: boolean;
+  /** Whether the current trim is at minimum duration constraint */
+  isAtMinimum: boolean;
+  /** Whether the current trim violates minimum duration constraint */
+  isBelowMinimum: boolean;
   /** Start trim drag operation */
   handleTrimStart: (
     clipId: string,
@@ -80,6 +87,8 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
   const [fixedOutPoint, setFixedOutPoint] = useState<number | null>(null);
   const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [tooltipVisible, setTooltipVisible] = useState<boolean>(false);
+  const [isAtMinimum, setIsAtMinimum] = useState<boolean>(false);
+  const [isBelowMinimum, setIsBelowMinimum] = useState<boolean>(false);
 
   /**
    * Start trim drag operation
@@ -133,8 +142,7 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
     mouseX: number,
     clipDuration: number,
     mouseXScreen?: number,
-    mouseYScreen?: number,
-    currentClipStartX?: number
+    mouseYScreen?: number
   ) => {
     if (!dragging) return;
 
@@ -144,6 +152,9 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
     // Convert delta to time delta
     const pixelsPerSecond = 10 * zoom; // BASE_PIXELS_PER_SECOND * zoom
     const timeDelta = mouseDelta / pixelsPerSecond;
+
+    let currentInPoint: number;
+    let currentOutPoint: number;
 
     if (dragging.edge === 'left') {
       // Dragging left handle: update trimStart
@@ -156,6 +167,9 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
       setDraggedInPoint(validatedInPoint);
       // Keep outPoint unchanged when dragging left handle (set to initial)
       setDraggedOutPoint(null);
+      
+      currentInPoint = validatedInPoint;
+      currentOutPoint = dragging.initialOutPoint;
     } else {
       // Dragging right handle: update trimEnd
       const newOutPoint = dragging.initialOutPoint + timeDelta;
@@ -167,7 +181,18 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
       setDraggedOutPoint(validatedOutPoint);
       // Keep inPoint unchanged when dragging right handle (set to null)
       setDraggedInPoint(null);
+      
+      currentInPoint = dragging.initialInPoint;
+      currentOutPoint = validatedOutPoint;
     }
+
+    // Check for constraint violations
+    const currentDuration = currentOutPoint - currentInPoint;
+    const isAtMin = Math.abs(currentDuration - MIN_CLIP_DURATION) < 0.01; // Within 0.01s of minimum
+    const isBelowMin = currentDuration < MIN_CLIP_DURATION;
+    
+    setIsAtMinimum(isAtMin);
+    setIsBelowMinimum(isBelowMin);
 
     // Update tooltip position to follow mouse cursor
     if (mouseXScreen !== undefined && mouseYScreen !== undefined) {
@@ -185,6 +210,8 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
     setFixedInPoint(null);
     setFixedOutPoint(null);
     setTooltipVisible(false);
+    setIsAtMinimum(false);
+    setIsBelowMinimum(false);
   }, []);
 
   return {
@@ -195,6 +222,8 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
     fixedOutPoint,
     tooltipPosition,
     tooltipVisible,
+    isAtMinimum,
+    isBelowMinimum,
     handleTrimStart,
     handleTrimMove,
     handleTrimEnd,

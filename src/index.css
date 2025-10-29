@@ -177,6 +177,37 @@ body {
   background-color: #1e4a6f;
 }
 
+/* Library Clip Delete Button */
+.library-clip-delete-button {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border: none;
+  border-radius: 50%;
+  background-color: rgba(255, 107, 107, 0.9);
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+  z-index: 10;
+}
+
+.library-clip-card:hover .library-clip-delete-button {
+  opacity: 1;
+}
+
+.library-clip-delete-button:hover {
+  background-color: rgba(255, 107, 107, 1);
+  transform: scale(1.1);
+}
+
 /* Clip Thumbnail Container */
 .clip-thumbnail-container {
   position: relative;
@@ -287,6 +318,23 @@ body {
 .toast-success {
   background-color: #00cc66;
   color: #ffffff;
+}
+
+/* Toast Content Layout */
+.toast-content {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.toast-message {
+  font-weight: 500;
+}
+
+.toast-countdown {
+  font-size: 11px;
+  opacity: 0.8;
+  font-style: italic;
 }
 
 /* Preview Panel - Center, takes remaining space (~40%) */
@@ -711,6 +759,30 @@ body {
   border-bottom-right-radius: 2px;
 }
 
+/* Trim Handle Warning States */
+.trim-handle-at-minimum {
+  background-color: rgba(255, 107, 107, 0.8) !important;
+  border: 1px solid #ff6b6b;
+  box-shadow: 0 0 4px rgba(255, 107, 107, 0.5);
+}
+
+.trim-handle-at-minimum:hover {
+  background-color: rgba(255, 107, 107, 1) !important;
+  box-shadow: 0 0 6px rgba(255, 107, 107, 0.7);
+}
+
+.trim-handle-at-minimum::after {
+  content: '⚠';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  color: #ffffff;
+  font-weight: bold;
+  text-shadow: 0 0 2px rgba(0, 0, 0, 0.8);
+}
+
 /* Trim Tooltip */
 .trim-tooltip {
   pointer-events: none;
@@ -769,6 +841,45 @@ body {
   font-size: 11px;
   font-weight: 500;
   margin-top: 2px;
+}
+
+/* Trim Tooltip Warning States */
+.trim-tooltip-warning {
+  border-color: #ff6b6b;
+  background-color: rgba(30, 20, 20, 0.95);
+}
+
+.trim-tooltip-warning-icon {
+  margin-left: 4px;
+  font-size: 12px;
+}
+
+.trim-tooltip-warning-text {
+  color: #ff6b6b !important;
+  font-weight: 700;
+}
+
+.trim-tooltip-minimum-label {
+  color: #ffa726;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.trim-tooltip-violation-label {
+  color: #ff6b6b;
+  font-size: 11px;
+  font-weight: 500;
+  margin-left: 4px;
+}
+
+.trim-tooltip-warning-message {
+  font-size: 11px;
+  color: #ff6b6b;
+  font-weight: 500;
+  margin-top: 4px;
+  padding-top: 4px;
+  border-top: 1px solid #ff6b6b;
 }
 
 .timeline-clip-filename {

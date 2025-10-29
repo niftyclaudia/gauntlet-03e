@@ -42,6 +42,10 @@ interface TimelineClipCardProps {
   fixedInPoint?: number | null;
   /** Fixed outPoint value (when dragging left handle, this is the initial trimEnd) */
   fixedOutPoint?: number | null;
+  /** Whether the left trim handle is at minimum constraint */
+  leftHandleAtMinimum?: boolean;
+  /** Whether the right trim handle is at minimum constraint */
+  rightHandleAtMinimum?: boolean;
 }
 
 /** Base height for timeline clips at 100% zoom */
@@ -67,6 +71,8 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
   draggedOutPoint,
   fixedInPoint,
   fixedOutPoint,
+  leftHandleAtMinimum = false,
+  rightHandleAtMinimum = false,
 }) => {
   const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string>('');
   const [isDragging, setIsDragging] = useState(false); // Track if currently dragging for visual feedback
@@ -297,7 +303,9 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
         <div
           className={`timeline-clip-trim-handle timeline-clip-trim-handle-left ${
             hoveredEdge === 'left' ? 'trim-handle-hovered' : ''
-          } ${isTrimming && hoveredEdge === 'left' ? 'trim-handle-dragging' : ''}`}
+          } ${isTrimming && hoveredEdge === 'left' ? 'trim-handle-dragging' : ''} ${
+            leftHandleAtMinimum ? 'trim-handle-at-minimum' : ''
+          }`}
           onMouseDown={handleLeftTrimMouseDown}
           onMouseEnter={handleLeftTrimMouseEnter}
           onMouseLeave={handleTrimMouseLeave}
@@ -309,7 +317,9 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
         <div
           className={`timeline-clip-trim-handle timeline-clip-trim-handle-right ${
             hoveredEdge === 'right' ? 'trim-handle-hovered' : ''
-          } ${isTrimming && hoveredEdge === 'right' ? 'trim-handle-dragging' : ''}`}
+          } ${isTrimming && hoveredEdge === 'right' ? 'trim-handle-dragging' : ''} ${
+            rightHandleAtMinimum ? 'trim-handle-at-minimum' : ''
+          }`}
           onMouseDown={handleRightTrimMouseDown}
           onMouseEnter={handleRightTrimMouseEnter}
           onMouseLeave={handleTrimMouseLeave}

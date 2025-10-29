@@ -764,6 +764,8 @@ const Timeline: React.FC<TimelineProps> = ({
                     draggedOutPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.draggedOutPoint : null}
                     fixedInPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.fixedInPoint : null}
                     fixedOutPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.fixedOutPoint : null}
+                    leftHandleAtMinimum={trimDrag.dragging?.clipId === clip.id && trimDrag.dragging?.edge === 'left' && trimDrag.isAtMinimum}
+                    rightHandleAtMinimum={trimDrag.dragging?.clipId === clip.id && trimDrag.dragging?.edge === 'right' && trimDrag.isAtMinimum}
                   />
                 </div>
 
@@ -870,6 +872,8 @@ const Timeline: React.FC<TimelineProps> = ({
             position={trimDrag.tooltipPosition}
             visible={trimDrag.tooltipVisible}
             isExpanding={isExpanding}
+            isAtMinimum={trimDrag.isAtMinimum}
+            isBelowMinimum={trimDrag.isBelowMinimum}
           />
         );
       })()}

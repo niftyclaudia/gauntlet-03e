@@ -16,9 +16,11 @@ interface LibraryClipCardProps {
   onSelect?: (clip: VideoClip) => void;
   /** Whether this clip is currently selected */
   isSelected?: boolean;
+  /** Callback when clip is deleted */
+  onDelete?: (clipId: string) => void;
 }
 
-const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect, isSelected = false }) => {
+const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect, isSelected = false, onDelete }) => {
   const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string>('');
 
   // Load thumbnail as data URL on mount
@@ -53,6 +55,13 @@ const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect, isSel
     e.currentTarget.style.opacity = '1';
   };
 
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent card selection when clicking delete
+    if (onDelete) {
+      onDelete(clip.id);
+    }
+  };
+
   // Format duration as MM:SS
   const durationDisplay = formatDuration(clip.duration);
 
@@ -70,6 +79,18 @@ const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect, isSel
       onDragEnd={handleDragEnd}
       title={clip.filename} // Show full filename on hover
     >
+      {/* Delete button */}
+      {onDelete && (
+        <button
+          className="library-clip-delete-button"
+          onClick={handleDelete}
+          aria-label="Delete clip"
+          title="Delete clip from library"
+        >
+          ×
+        </button>
+      )}
+      
       <div className="clip-thumbnail-container">
         {thumbnailDataUrl ? (
           <img 

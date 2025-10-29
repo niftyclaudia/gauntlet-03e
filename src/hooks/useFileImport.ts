@@ -9,7 +9,7 @@
  * - Error handling
  */
 
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { VideoClip } from '../types/video';
 import { validateVideoFile, getFilename } from '../utils/fileValidation';
@@ -34,11 +34,71 @@ export function useFileImport(): UseFileImportResult {
   const [importProgress, setImportProgress] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [warning, setWarning] = useState<string | null>(null);
+  
+  // Refs to store timeout IDs for clearing timers
+  const errorTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const warningTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const clearMessages = () => {
+    // Clear any existing timeouts
+    if (errorTimeoutRef.current) {
+      clearTimeout(errorTimeoutRef.current);
+      errorTimeoutRef.current = null;
+    }
+    if (warningTimeoutRef.current) {
+      clearTimeout(warningTimeoutRef.current);
+      warningTimeoutRef.current = null;
+    }
+    
     setError(null);
     setWarning(null);
   };
+
+  // Auto-dismiss error messages after 5 seconds
+  useEffect(() => {
+    if (error) {
+      // Clear any existing timeout
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
+      
+      // Set new timeout
+      errorTimeoutRef.current = setTimeout(() => {
+        setError(null);
+        errorTimeoutRef.current = null;
+      }, 5000); // 5 seconds
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      if (errorTimeoutRef.current) {
+        clearTimeout(errorTimeoutRef.current);
+      }
+    };
+  }, [error]);
+
+  // Auto-dismiss warning messages after 3 seconds
+  useEffect(() => {
+    if (warning) {
+      // Clear any existing timeout
+      if (warningTimeoutRef.current) {
+        clearTimeout(warningTimeoutRef.current);
+      }
+      
+      // Set new timeout
+      warningTimeoutRef.current = setTimeout(() => {
+        setWarning(null);
+        warningTimeoutRef.current = null;
+      }, 3000); // 3 seconds
+    }
+    
+    // Cleanup on unmount
+    return () => {
+      if (warningTimeoutRef.current) {
+        clearTimeout(warningTimeoutRef.current);
+      }
+    };
+  }, [warning]);
 
   const handleFileImport = async (filePaths: string[]): Promise<VideoClip[]> => {
     if (filePaths.length === 0) {
