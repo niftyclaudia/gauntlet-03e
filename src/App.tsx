@@ -11,17 +11,25 @@ import React, { useState, useCallback, useEffect, useRef } from 'react';
 import Library from './components/Library';
 import VideoPlayer from './components/VideoPlayer';
 import Timeline from './components/Timeline';
-import RecordScreenButton from './components/RecordScreenButton';
 import RecordScreenDialog from './components/RecordScreenDialog';
 import RecordingIndicator from './components/RecordingIndicator';
 import RecordingPermissionDialog from './components/RecordingPermissionDialog';
+import WebcamRecordingModal from './components/WebcamRecordingModal';
+import RecordingTypeModal from './components/RecordingTypeModal';
 import { VideoClip, TimelineClip } from './types/video';
 import { addClipToTimeline, reorderTimelineClip, removeClipFromTimeline } from './utils/timelineOperations';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useSessionRestore } from './hooks/useSessionRestore';
-import { useScreenRecording } from './hooks/useScreenRecording';
 import { serializeProjectState } from './utils/projectStateUtils';
-import { v4 as uuidv4 } from 'uuid';
+
+// Simple UUID v4 generator
+const generateUUID = (): string => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 const App: React.FC = () => {
   // Library state
@@ -34,23 +42,27 @@ const App: React.FC = () => {
   const [timelineScrollPosition, setTimelineScrollPosition] = useState<number>(0);
   const [currentPlayheadPosition, setCurrentPlayheadPosition] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [isExporting] = useState<boolean>(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
 
   // Recording state
   const [showRecordDialog, setShowRecordDialog] = useState<boolean>(false);
   const [showPermissionDialog, setShowPermissionDialog] = useState<boolean>(false);
   const [recordingSessionId, setRecordingSessionId] = useState<string | null>(null);
+  const [recordingElapsedSeconds, setRecordingElapsedSeconds] = useState<number>(0);
+  const [recordingAudioLevel] = useState<number>(0);
+  const [isProcessingRecording, setIsProcessingRecording] = useState<boolean>(false);
   const [recordingScreenSourceId, setRecordingScreenSourceId] = useState<string | null>(null);
   const [recordingAudioEnabled, setRecordingAudioEnabled] = useState<boolean>(false);
-  const [recordingAudioDeviceId, setRecordingAudioDeviceId] = useState<string>('default');
-  const [recordingElapsedSeconds, setRecordingElapsedSeconds] = useState<number>(0);
-  const [recordingAudioLevel, setRecordingAudioLevel] = useState<number>(0);
+  const [recordingAudioDeviceId, setRecordingAudioDeviceId] = useState<string | null>(null);
   const [recordingOutputPath, setRecordingOutputPath] = useState<string | null>(null);
-  const [isProcessingRecording, setIsProcessingRecording] = useState<boolean>(false);
   
-  // Recording hook (simplified - will wire up properly)
-  const recordingRef = useRef({ isRecording: false, elapsedSeconds: 0, error: null });
+  // Webcam recording state
+  const [showWebcamModal, setShowWebcamModal] = useState<boolean>(false);
+  
+  // Unified recording modal state
+  const [showRecordingTypeModal, setShowRecordingTypeModal] = useState<boolean>(false);
+  
 
   /**
    * Handle completion of video import
@@ -275,9 +287,57 @@ const App: React.FC = () => {
     onRestore: handleRestoreState,
   });
 
-  // Recording handlers
+  // Unified recording handlers
+  const handleRecordClick = useCallback(() => {
+    setShowRecordingTypeModal(true);
+  }, []);
+
+  const handleSelectScreenRecording = useCallback(() => {
+    setShowRecordingTypeModal(false);
+    setShowRecordDialog(true);
+  }, []);
+
+  const handleSelectWebcamRecording = useCallback(() => {
+    setShowRecordingTypeModal(false);
+    setShowWebcamModal(true);
+  }, []);
+
+  // Legacy handlers (kept for compatibility)
   const handleOpenRecordDialog = useCallback(() => {
     setShowRecordDialog(true);
+  }, []);
+
+  const handleOpenWebcamModal = useCallback(() => {
+    setShowWebcamModal(true);
+  }, []);
+
+  const handleWebcamRecordingComplete = useCallback(async (filePath: string) => {
+    try {
+      // Add recorded clip to library
+      const clipId = generateUUID();
+      const metadata = await window.electron.getMetadata(filePath);
+      const thumbnailPath = await window.electron.getThumbnail(filePath, clipId);
+      
+      const now = Date.now();
+      const dateStr = new Date(now).toLocaleString();
+      const newClip: VideoClip = {
+        id: clipId,
+        path: filePath,
+        filename: `Webcam Recording - ${dateStr}.mp4`,
+        duration: metadata.duration,
+        thumbnail: thumbnailPath,
+        metadata,
+        importedAt: now,
+        source: 'recording',
+        recordedAt: now,
+      };
+      
+      setLibrary(prev => [newClip, ...prev]);
+      console.log('[App] Webcam recording added to library:', newClip.filename);
+    } catch (err) {
+      console.error('[App] Failed to add webcam recording to library:', err);
+      alert('Failed to process webcam recording. File saved but not added to library.');
+    }
   }, []);
 
   const handleStartRecording = useCallback(async (screenId: string, audioEnabled: boolean, audioDeviceId?: string) => {
@@ -300,16 +360,15 @@ const App: React.FC = () => {
           const screenStream = await navigator.mediaDevices.getUserMedia({
             audio: false,
             video: {
-              // @ts-ignore - Electron-specific constraint
               mandatory: {
                 chromeMediaSource: 'desktop',
                 chromeMediaSourceId: screenId,
               },
-            } as any,
+            } as MediaTrackConstraints,
           });
 
           // Get audio stream if enabled
-          let combinedStream = screenStream;
+          const combinedStream = screenStream;
           if (audioEnabled) {
             try {
               const audioConstraints: MediaStreamConstraints = {
@@ -384,13 +443,13 @@ const App: React.FC = () => {
               alert(`Failed to save recording: ${writeError instanceof Error ? writeError.message : 'Unknown error'}`);
             } finally {
               // Reset stopping flag
-              (window as any).isRecordingStopping = false;
+              (window as unknown as { isRecordingStopping: boolean }).isRecordingStopping = false;
             }
           };
 
-          mediaRecorder.onerror = (event: any) => {
-            console.error('[App] MediaRecorder error:', event.error);
-            alert(`Recording error: ${event.error?.message || 'Unknown error'}`);
+          mediaRecorder.onerror = (event: Event) => {
+            console.error('[App] MediaRecorder error:', event);
+            alert(`Recording error: ${event instanceof ErrorEvent ? event.message : 'Unknown error'}`);
           };
 
           // Start recording
@@ -398,9 +457,9 @@ const App: React.FC = () => {
           console.log('[App] MediaRecorder started');
           
           // Store MediaRecorder reference and session info for stopping
-          (window as any).currentMediaRecorder = mediaRecorder;
-          (window as any).currentRecordingSessionId = result.sessionId;
-          (window as any).isRecordingStopping = false;
+          (window as unknown as { currentMediaRecorder: MediaRecorder; currentRecordingSessionId: string; isRecordingStopping: boolean }).currentMediaRecorder = mediaRecorder;
+          (window as unknown as { currentMediaRecorder: MediaRecorder; currentRecordingSessionId: string; isRecordingStopping: boolean }).currentRecordingSessionId = result.sessionId;
+          (window as unknown as { currentMediaRecorder: MediaRecorder; currentRecordingSessionId: string; isRecordingStopping: boolean }).isRecordingStopping = false;
           
         } catch (streamError) {
           console.error('[App] Failed to get media stream:', streamError);
@@ -422,16 +481,16 @@ const App: React.FC = () => {
     }
     
     // Prevent double-stop
-    if ((window as any).isRecordingStopping) {
+    if ((window as unknown as { isRecordingStopping: boolean }).isRecordingStopping) {
       console.log('[App] Recording stop already in progress');
       return;
     }
-    (window as any).isRecordingStopping = true;
+    (window as unknown as { isRecordingStopping: boolean }).isRecordingStopping = true;
     
     console.log('[App] Stopping recording...');
     
     // Stop MediaRecorder first
-    const mediaRecorder = (window as any).currentMediaRecorder;
+    const mediaRecorder = (window as unknown as { currentMediaRecorder: MediaRecorder }).currentMediaRecorder;
     if (mediaRecorder) {
       console.log('[App] MediaRecorder state:', mediaRecorder.state);
       
@@ -442,16 +501,16 @@ const App: React.FC = () => {
           console.log('[App] MediaRecorder.stop() called');
         } catch (err) {
           console.error('[App] Error stopping MediaRecorder:', err);
-          (window as any).isRecordingStopping = false;
+          (window as unknown as { isRecordingStopping: boolean }).isRecordingStopping = false;
           return;
         }
       } else {
         console.log('[App] MediaRecorder not recording, state:', mediaRecorder.state);
-        (window as any).isRecordingStopping = false;
+        (window as unknown as { isRecordingStopping: boolean }).isRecordingStopping = false;
       }
     } else {
       console.log('[App] No MediaRecorder found');
-      (window as any).isRecordingStopping = false;
+      (window as unknown as { isRecordingStopping: boolean }).isRecordingStopping = false;
     }
     
     // Note: The conversion will be triggered by the MediaRecorder onstop handler
@@ -471,7 +530,7 @@ const App: React.FC = () => {
         
         // Add recorded clip to library
         try {
-          const clipId = uuidv4();
+          const clipId = generateUUID();
           const metadata = await window.electron.getMetadata(data.filePath);
           const thumbnailPath = await window.electron.getThumbnail(data.filePath, clipId);
           
@@ -542,7 +601,7 @@ const App: React.FC = () => {
           onPlayingChange={setIsPlaying}
           onSelectClip={handleTimelineSelectClip}
           onBeforeExport={handleBeforeExport}
-          onOpenRecordDialog={handleOpenRecordDialog}
+          onRecordClick={handleRecordClick}
           isRecording={!!recordingSessionId}
           isProcessingRecording={isProcessingRecording}
         />
@@ -573,6 +632,17 @@ const App: React.FC = () => {
           setShowPermissionDialog(false);
           setShowRecordDialog(true);
         }}
+      />
+      <WebcamRecordingModal
+        isOpen={showWebcamModal}
+        onClose={() => setShowWebcamModal(false)}
+        onRecordingComplete={handleWebcamRecordingComplete}
+      />
+      <RecordingTypeModal
+        isOpen={showRecordingTypeModal}
+        onClose={() => setShowRecordingTypeModal(false)}
+        onSelectScreenRecording={handleSelectScreenRecording}
+        onSelectWebcamRecording={handleSelectWebcamRecording}
       />
       
       {isProcessingRecording && (
