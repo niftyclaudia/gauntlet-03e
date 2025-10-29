@@ -137,4 +137,55 @@ contextBridge.exposeInMainWorld('electron', {
       return ipcRenderer.invoke('trim:trimClip', clipId, inPoint, outPoint, clipDuration);
     },
   },
+
+  /**
+   * Opens native save dialog for export file
+   * @param defaultFilename - Default filename for export (e.g., "ollo_export_20250129_120000.mp4")
+   * @returns Promise<string | null> - file path or null if cancelled
+   */
+  showSaveDialog: (defaultFilename: string): Promise<string | null> => {
+    return ipcRenderer.invoke('export:showSaveDialog', defaultFilename);
+  },
+
+  /**
+   * Starts video export process
+   * @param clips - Timeline clips to export
+   * @param libraryClips - Library clips for source files
+   * @param outputPath - Output file path (absolute)
+   * @param projectState - Optional project state for auto-save before export
+   * @returns Promise<void>
+   * @throws Error if export fails
+   */
+  exportVideo: (
+    clips: any[],
+    libraryClips: any[],
+    outputPath: string,
+    projectState?: any
+  ): Promise<void> => {
+    return ipcRenderer.invoke('export:start', clips, libraryClips, outputPath, projectState);
+  },
+
+  /**
+   * Listens for export progress events
+   * @param callback - Progress callback (0-100)
+   * @returns Function to remove listener
+   */
+  onExportProgress: (callback: (progress: number) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: number) => {
+      callback(progress);
+    };
+    ipcRenderer.on('export:progress', handler);
+    return () => {
+      ipcRenderer.removeListener('export:progress', handler);
+    };
+  },
+
+  /**
+   * Opens macOS Finder to file location
+   * @param filePath - Absolute path to file
+   * @returns Promise<void>
+   */
+  revealInFinder: (filePath: string): Promise<void> => {
+    return ipcRenderer.invoke('export:revealInFinder', filePath);
+  },
 });
