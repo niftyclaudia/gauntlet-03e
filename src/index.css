@@ -10,6 +10,19 @@
   box-sizing: border-box;
 }
 
+/* Animations */
+@keyframes pulse {
+  0% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+  100% {
+    opacity: 1;
+  }
+}
+
 html,
 body {
   width: 100%;
@@ -1957,4 +1970,85 @@ body {
 @keyframes spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
+}
+
+/* PiP Recording Modal Styles */
+.pip-settings {
+  margin: 24px 0;
+}
+
+.setting-group {
+  margin-bottom: 24px;
+}
+
+.setting-label {
+  display: block;
+  font-weight: 600;
+  color: #ffffff;
+  margin-bottom: 12px;
+  font-size: 14px;
+}
+
+.position-selector,
+.size-selector {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+}
+
+.position-button,
+.size-button {
+  padding: 12px 16px;
+  border: 2px solid #444444;
+  border-radius: 8px;
+  background-color: #2a2a2a;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.position-button:hover,
+.size-button:hover {
+  border-color: #666666;
+  background-color: #333333;
+}
+
+.position-button.active,
+.size-button.active {
+  border-color: #ff6b35;
+  background-color: #3a2520;
+  color: #ff6b35;
+}
+
+.audio-mode-selector {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.radio-label {
+  display: flex;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid #444444;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.radio-label:hover {
+  border-color: #666666;
+  background-color: #2a2a2a;
+}
+
+.radio-label input[type="radio"] {
+  margin: 0 12px 0 0;
+  accent-color: #ff6b35;
+}
+
+.radio-label input[type="radio"]:checked + span {
+  color: #ff6b35;
+  font-weight: 600;
 }
