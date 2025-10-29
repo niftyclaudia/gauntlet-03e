@@ -9,7 +9,7 @@
 const BASE_PIXELS_PER_SECOND = 10;
 
 /** Minimum clip duration in seconds */
-const MIN_CLIP_DURATION = 0.5;
+const MIN_CLIP_DURATION = 1.0;
 
 /**
  * Convert mouse X position (in pixels) to time in seconds
@@ -68,11 +68,11 @@ export function validateTrimStart(
   // Ensure trimStart < trimEnd
   validTrimStart = Math.min(validTrimStart, trimEnd - 0.01);
   
-  // Ensure minimum duration (trimEnd - trimStart >= 0.5)
+  // Ensure minimum duration (trimEnd - trimStart >= 1.0)
   const maxTrimStart = trimEnd - MIN_CLIP_DURATION;
   validTrimStart = Math.min(validTrimStart, maxTrimStart);
   
-  // Ensure trimStart cannot exceed (clipDuration - 0.5s)
+  // Ensure trimStart cannot exceed (clipDuration - 1.0s)
   validTrimStart = Math.min(validTrimStart, clipDuration - MIN_CLIP_DURATION);
   
   return Math.max(0, validTrimStart);
@@ -97,7 +97,7 @@ export function validateTrimEnd(
   // Ensure trimEnd > trimStart
   validTrimEnd = Math.max(validTrimEnd, trimStart + 0.01);
   
-  // Ensure minimum duration (trimEnd - trimStart >= 0.5)
+  // Ensure minimum duration (trimEnd - trimStart >= 1.0)
   const minTrimEnd = trimStart + MIN_CLIP_DURATION;
   validTrimEnd = Math.max(validTrimEnd, minTrimEnd);
   

@@ -138,7 +138,7 @@ The MVP is complete when you can:
 **Trim Behavior**
 - Drag left handle right to trim start
 - Drag right handle left to trim end
-- Minimum clip duration: 0.5 seconds
+- Minimum clip duration: 1.0 seconds
 - Duration updates in real-time
 - Thumbnail updates to show new start frame
 
