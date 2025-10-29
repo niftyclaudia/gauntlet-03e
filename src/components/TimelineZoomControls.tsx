@@ -5,7 +5,7 @@
  * - Zoom to Fit Timeline button
  * - Zoom Out (-) button
  * - Zoom In (+) button
- * Supports zoom range from 20% (0.2) to 1000% (10.0)
+ * Supports zoom range from 2% (0.02) to 1000% (10.0)
  */
 
 import React, { useEffect } from 'react';
@@ -13,7 +13,7 @@ import { TimelineClip, VideoClip } from '../types/video';
 import { calculateAutoFitZoom } from '../utils/timelineCalculations';
 
 interface TimelineZoomControlsProps {
-  /** Current zoom level (0.2 to 10.0) - represents 20% to 1000% */
+  /** Current zoom level (0.02 to 10.0) - represents 2% to 1000% */
   zoom: number;
   /** Callback when zoom changes */
   onZoomChange: (zoom: number) => void;
@@ -25,8 +25,8 @@ interface TimelineZoomControlsProps {
   timelineContainerRef: React.RefObject<HTMLDivElement>;
 }
 
-/** Minimum zoom level (10%) */
-const MIN_ZOOM = 0.1;
+/** Minimum zoom level (2%) */
+const MIN_ZOOM = 0.02;
 /** Maximum zoom level (1000%) */
 const MAX_ZOOM = 10.0;
 /** Zoom step for buttons */

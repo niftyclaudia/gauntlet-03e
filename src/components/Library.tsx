@@ -29,8 +29,8 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
   const { isImporting, importProgress, handleFileImport, error, warning, clearMessages } = useFileImport();
   
   // Countdown timers for auto-dismiss
-  const errorCountdown = useCountdown(5, !!error);
-  const warningCountdown = useCountdown(3, !!warning);
+  const errorCountdown = useCountdown(10, !!error);
+  const warningCountdown = useCountdown(8, !!warning);
 
   /**
    * Handle file picker button click

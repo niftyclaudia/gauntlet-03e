@@ -546,7 +546,7 @@ npm start  # Launch dev mode
 - Maintain audio sync across clips
 - Validation: Sequence plays all clips in order with audio
 
-### Phase 8: Export
+### Phase 8: Export COMPLETE
 - Build FFmpeg export command generator
 - Implement trim application (per-clip -ss and -t)
 - Implement clip concatenation (concat demuxer)
@@ -566,7 +566,7 @@ npm start  # Launch dev mode
 - Final UI polish (spacing, colors, alignment)
 - Validation: Complete end-to-end test
 
-### Phase 10: Build & Package
+### Phase 10: Build & Package COMPLETE
 - Configure Electron Forge for macOS packaging
 - Bundle FFmpeg binary with app
 - Create simple app icon (lowercase "ollo" text)

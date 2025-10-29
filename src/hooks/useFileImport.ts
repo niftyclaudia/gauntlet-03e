@@ -204,6 +204,7 @@ export function useFileImport(): UseFileImportResult {
       return importedClips;
     } finally {
       setIsImporting(false);
+      setWarning(null); // Clear warning message when import completes
     }
   };
 
