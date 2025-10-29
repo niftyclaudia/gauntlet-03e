@@ -187,3 +187,53 @@ export interface ExportParams {
   settings: ExportSettings;
 }
 
+/**
+ * Webcam recording session state (transient, not persisted)
+ */
+export interface RecordingSession {
+  /** Current recording status */
+  status: 'idle' | 'preview' | 'recording' | 'saving' | 'error';
+  /** Live camera + audio stream from getUserMedia */
+  mediaStream?: MediaStream;
+  /** WebRTC recording object */
+  mediaRecorder?: MediaRecorder;
+  /** Raw recording chunks from MediaRecorder */
+  recordedChunks: Blob[];
+  /** Timestamp when recording started (ms) */
+  startTime: number;
+  /** Computed elapsed time in seconds */
+  elapsedSeconds: number;
+  /** Error description if failed */
+  errorMessage?: string;
+  /** Camera device ID (if multi-camera) */
+  selectedCameraId?: string;
+}
+
+/**
+ * Camera device info from enumerateDevices
+ */
+export interface CameraDevice {
+  /** Unique device identifier */
+  deviceId: string;
+  /** Human-readable device name */
+  label: string;
+  /** Device type (always 'videoinput' for cameras) */
+  kind: 'videoinput';
+}
+
+/**
+ * Encoded recording result from FFmpeg
+ */
+export interface EncodedRecording {
+  /** Full path to saved MP4 file */
+  filePath: string;
+  /** Duration in seconds */
+  duration: number;
+  /** Video width in pixels */
+  width: number;
+  /** Video height in pixels */
+  height: number;
+  /** Path to thumbnail image (optional) */
+  thumbnailPath?: string;
+}
+

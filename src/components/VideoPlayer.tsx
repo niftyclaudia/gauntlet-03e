@@ -11,7 +11,7 @@ import PlayerControls from './PlayerControls';
 import SequencePreviewButton from './SequencePreviewButton';
 import ExportProgressBar from './ExportProgressBar';
 import ExportDialog from './ExportDialog';
-import RecordScreenButton from './RecordScreenButton';
+import RecordButton from './RecordButton';
 import { useExport } from '../hooks/useExport';
 import {
   calculateSequence,
@@ -39,8 +39,8 @@ interface VideoPlayerProps {
   onSelectClip?: (clipId: string | null) => void;
   /** Callback to get project state for auto-save before export */
   onBeforeExport?: () => Promise<any>;
-  /** Callback when record screen dialog should open */
-  onOpenRecordDialog?: () => void;
+  /** Callback when record button is clicked */
+  onRecordClick?: () => void;
   /** Whether recording is currently active */
   isRecording?: boolean;
   /** Whether recording is being processed */
@@ -57,7 +57,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onPlayingChange,
   onSelectClip,
   onBeforeExport,
-  onOpenRecordDialog,
+  onRecordClick,
   isRecording = false,
   isProcessingRecording = false,
 }) => {
@@ -1520,9 +1520,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           isEmpty={timeline.length === 0}
           onClick={handleSequencePreview}
         />
-        {onOpenRecordDialog && (
-          <RecordScreenButton
-            onOpenDialog={onOpenRecordDialog}
+        {onRecordClick && (
+          <RecordButton
+            onClick={onRecordClick}
             disabled={isRecording || isProcessingRecording}
           />
         )}

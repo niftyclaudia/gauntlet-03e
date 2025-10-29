@@ -331,4 +331,53 @@ contextBridge.exposeInMainWorld('electron', {
       return ipcRenderer.invoke('recording:write-file', { sessionId, data });
     },
   },
+
+  /**
+   * Webcam recording API
+   */
+  webcam: {
+    /**
+     * Encode webcam recording using FFmpeg
+     * @param recordedBlob - Buffer containing recorded video data
+     * @param outputPath - Path where to save the encoded MP4
+     * @param mimeType - MIME type of the recorded data
+     * @param videoDimensions - Video dimensions { width, height }
+     * @returns Promise with encoded recording info
+     */
+    encodeRecording: (
+      recordedBlob: ArrayBuffer,
+      outputPath: string,
+      mimeType: string,
+      videoDimensions: { width: number; height: number }
+    ): Promise<{
+      filePath: string;
+      duration: number;
+      width: number;
+      height: number;
+      thumbnailPath?: string;
+    }> => {
+      return ipcRenderer.invoke('encode-webcam-recording', {
+        recordedBlob,
+        outputPath,
+        mimeType,
+        videoDimensions
+      });
+    },
+
+    /**
+     * Check camera permission (placeholder - actual check happens in renderer)
+     * @returns Promise<boolean> - always true
+     */
+    checkCameraPermission: (): Promise<boolean> => {
+      return ipcRenderer.invoke('check-camera-permission');
+    },
+
+    /**
+     * Check microphone permission (placeholder - actual check happens in renderer)
+     * @returns Promise<boolean> - always true
+     */
+    checkMicrophonePermission: (): Promise<boolean> => {
+      return ipcRenderer.invoke('check-microphone-permission');
+    },
+  },
 });
