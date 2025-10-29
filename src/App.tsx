@@ -252,6 +252,7 @@ const App: React.FC = () => {
           isPlaying={isPlaying}
           onPlayingChange={setIsPlaying}
           onSelectClip={handleTimelineSelectClip}
+          onBeforeExport={handleBeforeExport}
         />
       </div>
       <Timeline

@@ -188,6 +188,48 @@ const Timeline: React.FC<TimelineProps> = ({
         
         setLibraryInsertIndex(insertIndex);
       }
+    } else if (e.dataTransfer.types.includes('application/timeline-clip-index')) {
+      // Handle timeline clip reordering drag over
+      console.log('[Timeline] Main container drag over - timeline clip reordering');
+      // Calculate hover index based on mouse position for timeline clip reordering
+      if (clipsContainerRef.current && timelineContainerRef.current) {
+        const rect = clipsContainerRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const scrollX = timelineContainerRef.current.scrollLeft;
+        const absoluteMouseX = mouseX + scrollX;
+        
+        // Find which index to hover at based on X position
+        let hoverIndex = timeline.length; // Default to end
+        
+        for (let i = 0; i < sortedTimeline.length; i++) {
+          const clip = sortedTimeline[i];
+          const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
+          if (!libraryClip) continue;
+          
+          const clipPosition = calculateClipPosition(i, sortedTimeline, library, timelineZoom);
+          const clipWidth = applyClipWidthConstraints(calculateClipWidth(clip, libraryClip, timelineZoom));
+          
+          // Check if mouse is before this clip (hover before)
+          if (absoluteMouseX < clipPosition) {
+            hoverIndex = i;
+            break;
+          }
+          // Check if mouse is in the first half of this clip (hover before)
+          else if (absoluteMouseX < clipPosition + clipWidth / 2) {
+            hoverIndex = i;
+            break;
+          }
+          // Otherwise, hover after (continue to next iteration)
+          else if (i === sortedTimeline.length - 1) {
+            hoverIndex = timeline.length;
+          }
+        }
+        
+        console.log('[Timeline] Calculated hover index from main container:', hoverIndex);
+        // Set hover index and store in dataTransfer
+        setDragOverIndex(hoverIndex);
+        e.dataTransfer.setData('application/timeline-hover-index', String(hoverIndex));
+      }
     }
   };
 
@@ -223,9 +265,20 @@ const Timeline: React.FC<TimelineProps> = ({
     const dragIndexStr = e.dataTransfer.getData('application/timeline-clip-index');
     const hoverIndexStr = e.dataTransfer.getData('application/timeline-hover-index');
     
-    if (dragIndexStr !== '' && hoverIndexStr !== '') {
+    console.log('[Timeline] Drop event - dragIndex:', dragIndexStr, 'hoverIndex:', hoverIndexStr, 'isReordering:', isReordering, 'dragOverIndex:', dragOverIndex);
+    
+    // If hover index wasn't set in dataTransfer, use the current dragOverIndex state
+    let finalHoverIndex = hoverIndexStr;
+    if ((!finalHoverIndex || finalHoverIndex === '') && dragOverIndex !== null) {
+      finalHoverIndex = String(dragOverIndex);
+      console.log('[Timeline] Using dragOverIndex from state:', dragOverIndex);
+    }
+    
+    if (dragIndexStr !== '' && finalHoverIndex !== '') {
       const dragIndex = parseInt(dragIndexStr, 10);
-      let hoverIndex = parseInt(hoverIndexStr, 10);
+      let hoverIndex = parseInt(finalHoverIndex, 10);
+      
+      console.log('[Timeline] Parsed indices - dragIndex:', dragIndex, 'hoverIndex:', hoverIndex);
       
       // Handle dropping at the end (hoverIndex === timeline.length)
       if (hoverIndex >= timeline.length) {
@@ -233,8 +286,13 @@ const Timeline: React.FC<TimelineProps> = ({
       }
       
       if (!isNaN(dragIndex) && !isNaN(hoverIndex) && dragIndex !== hoverIndex && dragIndex >= 0 && hoverIndex >= 0) {
+        console.log('[Timeline] Calling onReorderClip:', dragIndex, '->', hoverIndex);
         onReorderClip(dragIndex, hoverIndex);
+      } else {
+        console.log('[Timeline] Reorder validation failed:', { dragIndex, hoverIndex, timelineLength: timeline.length });
       }
+    } else {
+      console.log('[Timeline] Missing drag data:', { dragIndexStr, hoverIndexStr, dragOverIndex });
     }
 
     setIsReordering(false);
@@ -247,6 +305,7 @@ const Timeline: React.FC<TimelineProps> = ({
     e.stopPropagation();
     
     if (e.dataTransfer.types.includes('application/timeline-clip-index')) {
+      console.log('[Timeline] Drag over clip index:', hoverIndex);
       setIsReordering(true);
       setDragOverIndex(hoverIndex);
       e.dataTransfer.dropEffect = 'move';

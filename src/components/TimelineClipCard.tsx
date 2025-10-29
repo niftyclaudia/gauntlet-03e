@@ -4,7 +4,7 @@
  * Displays individual clip card on timeline with thumbnail, filename, and duration
  */
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { TimelineClip, VideoClip } from '../types/video';
 import { formatDuration } from '../utils/formatDuration';
 import { calculateClipWidth } from '../utils/timelineCalculations';
@@ -69,6 +69,10 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
   fixedOutPoint,
 }) => {
   const [thumbnailDataUrl, setThumbnailDataUrl] = useState<string>('');
+  const [isDragging, setIsDragging] = useState(false); // Track if currently dragging for visual feedback
+  const hasDraggedRef = useRef(false); // Track if drag occurred to prevent click
+  const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null); // Track mouse down position
+  const isDraggingRef = useRef(false); // Track if currently dragging
 
   // Load thumbnail as data URL on mount
   useEffect(() => {
@@ -106,8 +110,88 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
     ? libraryClip.filename.substring(0, 17) + '...'
     : libraryClip.filename;
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Track mouse down position and reset drag flags
+    mouseDownPosRef.current = { x: e.clientX, y: e.clientY };
+    hasDraggedRef.current = false;
+    isDraggingRef.current = false;
+    
+    // Add global mouse move and mouse up listeners to detect drag
+    const handleGlobalMouseMove = (moveEvent: MouseEvent) => {
+      if (mouseDownPosRef.current) {
+        const dx = Math.abs(moveEvent.clientX - mouseDownPosRef.current.x);
+        const dy = Math.abs(moveEvent.clientY - mouseDownPosRef.current.y);
+        // If mouse moved more than 5 pixels, consider it a drag
+        if (dx > 5 || dy > 5) {
+          isDraggingRef.current = true;
+        }
+      }
+    };
+
+    const handleGlobalMouseUp = () => {
+      // If we were dragging, mark it so click won't fire
+      if (isDraggingRef.current) {
+        hasDraggedRef.current = true;
+        // Reset after a delay
+        setTimeout(() => {
+          hasDraggedRef.current = false;
+          isDraggingRef.current = false;
+        }, 100);
+      }
+      mouseDownPosRef.current = null;
+      window.removeEventListener('mousemove', handleGlobalMouseMove);
+      window.removeEventListener('mouseup', handleGlobalMouseUp);
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+  };
+
   const handleDragStart = (e: React.DragEvent) => {
+    console.log('[TimelineClipCard] Drag start for clip index:', clipIndex);
+    hasDraggedRef.current = true;
+    isDraggingRef.current = true;
+    setIsDragging(true);
+    // Set drag image to empty (default drag image can interfere)
+    const emptyImg = document.createElement('img');
+    emptyImg.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAUEBAAAACwAAAAAAQABAAACAkQBADs=';
+    e.dataTransfer.setDragImage(emptyImg, 0, 0);
+    // Ensure drag effect is set
+    e.dataTransfer.effectAllowed = 'move';
+    // Prevent click from firing
+    e.stopPropagation();
     onDragStart(e, clipIndex);
+  };
+
+  const handleDragEnd = () => {
+    console.log('[TimelineClipCard] Drag end for clip index:', clipIndex);
+    setIsDragging(false);
+    // Reset drag flag after a delay to allow click handling
+    setTimeout(() => {
+      hasDraggedRef.current = false;
+      isDraggingRef.current = false;
+      mouseDownPosRef.current = null;
+    }, 200);
+  };
+
+  const handleClick = (e: React.MouseEvent) => {
+    // Prevent click if drag occurred
+    if (hasDraggedRef.current || isDraggingRef.current) {
+      console.log('[TimelineClipCard] Preventing click (drag occurred)');
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+    
+    // Delay click slightly to allow drag to start if user is dragging
+    const clickTime = Date.now();
+    setTimeout(() => {
+      // Only fire click if no drag occurred in the meantime
+      if (!hasDraggedRef.current && !isDraggingRef.current) {
+        console.log('[TimelineClipCard] Click handler firing (no drag after delay)');
+        onClick();
+      }
+    }, 50); // Small delay to allow drag to register
   };
 
   const handleDeleteClick = (e: React.MouseEvent) => {
@@ -163,14 +247,17 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
 
   return (
     <div
-      className={`timeline-clip-card ${isSelected ? 'timeline-clip-selected' : ''} ${hasTrimHandleActive ? 'timeline-clip-trimming' : ''}`}
+      className={`timeline-clip-card ${isSelected ? 'timeline-clip-selected' : ''} ${hasTrimHandleActive ? 'timeline-clip-trimming' : ''} ${isDragging ? 'timeline-clip-dragging' : ''}`}
       style={{
         width: `${clipWidth}px`,
         minWidth: '50px', // Minimum width for visibility
+        opacity: isDragging ? 0.7 : 1,
       }}
-      onClick={onClick}
+      onClick={handleClick}
+      onMouseDown={handleMouseDown}
       draggable
       onDragStart={handleDragStart}
+      onDragEnd={handleDragEnd}
     >
       <div 
         className="timeline-clip-thumbnail-container"

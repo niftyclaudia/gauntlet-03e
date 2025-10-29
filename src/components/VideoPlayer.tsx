@@ -9,6 +9,9 @@ import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { VideoClip, TimelineClip, SequenceItem } from '../types/video';
 import PlayerControls from './PlayerControls';
 import SequencePreviewButton from './SequencePreviewButton';
+import ExportProgressBar from './ExportProgressBar';
+import ExportDialog from './ExportDialog';
+import { useExport } from '../hooks/useExport';
 import {
   calculateSequence,
   calculateSequenceDuration,
@@ -33,6 +36,8 @@ interface VideoPlayerProps {
   onPlayingChange: (playing: boolean) => void;
   /** Callback when clip selection should change (for timeline clicks) */
   onSelectClip?: (clipId: string | null) => void;
+  /** Callback to get project state for auto-save before export */
+  onBeforeExport?: () => Promise<any>;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -44,6 +49,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   isPlaying,
   onPlayingChange,
   onSelectClip,
+  onBeforeExport,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playerState, setPlayerState] = useState<{
@@ -74,11 +80,84 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const sequenceStartTimeRef = useRef(0); // Track when sequence started (for calculating elapsed time)
   const lastPlayheadChangeTimeRef = useRef(0); // Track timing of playhead changes for detecting drag
   const isUserDraggingRef = useRef(false); // Track if user is actively dragging playhead
+  const isEndingSequenceRef = useRef(false); // Track if we're ending the sequence (to prevent unwanted clip loads)
   const isPlayingRef = useRef(isPlaying); // Keep ref in sync for keyboard handler
   const playerStateRef = useRef(playerState); // Keep ref in sync for keyboard handler
   const currentPlayheadPositionRef = useRef(currentPlayheadPosition); // Keep ref in sync for keyboard handler
   const sequenceRef = useRef(sequence); // Keep ref in sync for keyboard handler
   const currentSequenceIndexRef = useRef(currentSequenceIndex); // Keep ref in sync for keyboard handler
+
+  // Export hook for export functionality
+  const exportHook = useExport();
+  const [showExportDialog, setShowExportDialog] = useState(false);
+  const wasExportingRef = useRef(false); // Track previous exporting state to detect completion
+
+  /**
+   * Handle export button click
+   */
+  const handleExportClick = useCallback(async () => {
+    try {
+      // Get project state for auto-save before export (if callback provided)
+      let projectState = undefined;
+      if (onBeforeExport) {
+        try {
+          projectState = await onBeforeExport();
+        } catch (error) {
+          console.error('[VideoPlayer] Failed to get project state before export:', error);
+          // Continue with export even if auto-save fails
+        }
+      }
+      
+      // Start export (dialog will be shown via useEffect when export completes)
+      await exportHook.startExport(timeline, library, projectState);
+    } catch (error) {
+      console.error('[VideoPlayer] Export failed:', error);
+      // Error state will be set in exportHook, useEffect will show dialog
+    }
+  }, [timeline, library, exportHook, onBeforeExport]);
+
+  /**
+   * Show export dialog when export completes (success or error)
+   * Watch for transition from exporting (true) to not exporting (false)
+   */
+  useEffect(() => {
+    // Detect when export completes: was exporting, now not exporting, and have result
+    const exportJustCompleted = wasExportingRef.current && !exportHook.isExporting && 
+                                (exportHook.outputPath || exportHook.error);
+    
+    if (exportJustCompleted && !showExportDialog) {
+      console.log('[VideoPlayer] Export completed, showing dialog:', {
+        success: !!exportHook.outputPath,
+        error: exportHook.error,
+        outputPath: exportHook.outputPath
+      });
+      setShowExportDialog(true);
+    }
+    
+    // Update ref to track current state for next render
+    wasExportingRef.current = exportHook.isExporting;
+  }, [exportHook.isExporting, exportHook.outputPath, exportHook.error, showExportDialog]);
+
+  /**
+   * Handle reveal in Finder
+   */
+  const handleRevealInFinder = useCallback(async () => {
+    if (exportHook.outputPath) {
+      try {
+        await window.electron.revealInFinder(exportHook.outputPath);
+      } catch (error) {
+        console.error('[VideoPlayer] Failed to reveal in Finder:', error);
+      }
+    }
+  }, [exportHook.outputPath]);
+
+  /**
+   * Handle export dialog close
+   */
+  const handleExportDialogClose = useCallback(() => {
+    setShowExportDialog(false);
+    exportHook.reset();
+  }, [exportHook]);
 
   /**
    * Calculate sequence from timeline whenever timeline changes
@@ -159,9 +238,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         currentTime: 0,
         error: null,
       }));
-      if (videoRef.current) {
-        videoRef.current.src = '';
-      }
+      // Video source is now handled by JSX src attribute
       return;
     }
 
@@ -240,16 +317,43 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             const needsReload = !currentSrc.includes(encodeURI(clip.path)) || 
                                Math.abs(currentTime - clampedLocalTime) > 0.5;
             
+            // Debug: Log sequence clip loading (commented out for production)
+            // console.log('[VideoPlayer] Sequence clip loading check:', {
+            //   clipPath: clip.path,
+            //   currentSrc: currentSrc,
+            //   currentTime: currentTime,
+            //   clampedLocalTime: clampedLocalTime,
+            //   needsReload: needsReload,
+            //   isSequence: isSequence,
+            //   currentSequenceIndex: currentSequenceIndex
+            // });
+            
             if (needsReload) {
-              console.log('[VideoPlayer] Loading sequence clip:', clip.filename, 'at time:', clampedLocalTime);
-              videoRef.current.src = videoSrc;
-              videoRef.current.currentTime = clampedLocalTime;
-              videoRef.current.load();
+              // Debug: Log sequence clip loading (commented out for production)
+              // console.log('[VideoPlayer] Loading sequence clip:', clip.filename, 'at time:', clampedLocalTime);
+              // console.log('[VideoPlayer] Video source:', videoSrc);
+              // console.log('[VideoPlayer] Current sequence index:', currentSequenceIndex);
+              // Video source is now set via JSX src attribute, just seek to correct time
+              // For sequence transitions, start from trimStart of the new clip
+              const startTime = currentSequenceItem.clip.trimStart;
+              videoRef.current.currentTime = startTime;
 
               // Wait for metadata, then start playing if sequence was playing
               const handleCanPlay = () => {
                 if (isSequenceModeRef.current && isPlaying && videoRef.current) {
                   console.log('[VideoPlayer] Sequence clip ready, starting playback');
+                  
+                  // Ensure video is positioned at the correct time for the new clip
+                  const currentSequenceItem = sequence[currentSequenceIndex >= 0 ? currentSequenceIndex : 0];
+                  if (currentSequenceItem) {
+                    // For sequence transitions, start from trimStart of the new clip
+                    const startTime = currentSequenceItem.clip.trimStart;
+                    videoRef.current.currentTime = startTime;
+                    
+                    // Update playhead to the start of the new clip
+                    onPlayheadChange(currentSequenceItem.startTime);
+                  }
+                  
                   videoRef.current.play().catch(err => {
                     // AbortError is expected when video is loading, filter it out
                     if (err.name !== 'AbortError') {
@@ -265,6 +369,17 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               
               // Also try playing immediately if metadata is already loaded
               if (videoRef.current.readyState >= 2 && isSequenceModeRef.current && isPlaying) {
+                // Ensure video is positioned at the correct time for the new clip
+                const currentSequenceItem = sequence[currentSequenceIndex >= 0 ? currentSequenceIndex : 0];
+                if (currentSequenceItem) {
+                  // For sequence transitions, start from trimStart of the new clip
+                  const startTime = currentSequenceItem.clip.trimStart;
+                  videoRef.current.currentTime = startTime;
+                  
+                  // Update playhead to the start of the new clip
+                  onPlayheadChange(currentSequenceItem.startTime);
+                }
+                
                 videoRef.current.play().catch(err => {
                   // AbortError is expected when video is loading, filter it out
                   if (err.name !== 'AbortError') {
@@ -342,11 +457,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         
         if (needsReload) {
           console.log('[VideoPlayer] Setting video src:', videoSrc, 'at time:', targetVideoTime);
-          videoRef.current.src = videoSrc;
+          // Video source is now set via JSX src attribute, just seek to correct time
           videoRef.current.currentTime = targetVideoTime;
-          
-          // Force load only if we changed the source
-          videoRef.current.load();
           
           // Mark loading as complete once metadata is loaded
           const handleCanPlayOnce = () => {
@@ -412,6 +524,62 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   useEffect(() => {
     if (!videoRef.current) return;
 
+    // CRITICAL: Check sequence mode FIRST - if in sequence mode, handle it separately and skip user interaction detection
+    // Sequence mode playhead updates come from handleTimeUpdate during automatic playback
+    // This MUST be checked first to prevent sequence playback from being misclassified as timeline clicks
+    const isInSequenceMode = isSequenceModeRef.current && sequence.length > 0;
+    
+    // Don't process playhead changes if we're ending the sequence (let it finish naturally)
+    if (isEndingSequenceRef.current) {
+      lastPlayheadPositionRef.current = currentPlayheadPosition;
+      return;
+    }
+    
+    if (isInSequenceMode) {
+      // Handle sequence mode playhead changes (automatic playback updates from handleTimeUpdate)
+      // Find which clip corresponds to the new playhead position
+      const newClipIndex = findCurrentClipInSequence(sequence, currentPlayheadPosition);
+      
+      if (newClipIndex >= 0 && newClipIndex < sequence.length) {
+        const targetItem = sequence[newClipIndex];
+        const localTime = getLocalTimeInClip(targetItem, currentPlayheadPosition);
+        const clampedLocalTime = Math.max(
+          targetItem.clip.trimStart,
+          Math.min(localTime, targetItem.clip.trimEnd)
+        );
+
+        // Check if we need to switch clips
+        if (newClipIndex !== currentSequenceIndex) {
+          // This is a clip transition - let handleTimeUpdate handle it to avoid conflicts
+          // Just update the sequence time and let the video element trigger the transition
+          setSequenceTime(currentPlayheadPosition);
+        } else {
+          // Same clip, just seek (for smooth playback within same clip)
+          const currentItem = sequence[currentSequenceIndex];
+          if (currentItem && videoRef.current) {
+            const currentVideoTime = videoRef.current.currentTime || 0;
+            const diff = Math.abs(clampedLocalTime - currentVideoTime);
+            
+            // Only seek if difference is significant (avoid micro-adjustments during playback)
+            if (diff > 0.1) {
+              isExternalSeekRef.current = true;
+              videoRef.current.currentTime = clampedLocalTime;
+              setSequenceTime(currentPlayheadPosition);
+              
+              setTimeout(() => {
+                isExternalSeekRef.current = false;
+              }, 100);
+            }
+          }
+        }
+      }
+      
+      // Update last playhead position and exit - sequence mode handled, skip rest of effect
+      lastPlayheadPositionRef.current = currentPlayheadPosition;
+      return;
+    }
+
+    // NOT in sequence mode - handle user interactions and single clip playback
     // Check if this is a significant seek (likely user interaction, not playback update)
     // Small changes (< 0.5s) are likely from playback, larger changes are user seeks  
     const previousPlayhead = lastPlayheadPositionRef.current;
@@ -436,12 +604,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     const currentMode = playerState.playbackMode;
     
     // When timeline has clips and there's any playhead change > 0.1s, treat as user interaction
-    // Exception: Don't treat as user interaction if we're in sequence mode playing (automatic playback updates)
-    // OR if the change is from video playback updating timeline playhead (handled separately)
+    // Exception: Don't treat as user interaction if the change is from video playback updating timeline playhead
     const isPlaybackUpdate = currentMode === 'timeline' && isPlaying && playheadDelta < 0.2;
     const isUserInteraction = isUserSeek || isDragging || 
-                             (timeline.length > 0 && playheadDelta > 0.1 && 
-                              !isSequenceModeRef.current && !isPlaybackUpdate);
+                               (timeline.length > 0 && playheadDelta > 0.1 && !isPlaybackUpdate);
     
     // Update timestamp for next check
     lastPlayheadChangeTimeRef.current = now;
@@ -452,7 +618,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     // IMPORTANT: When user clicks/drags timeline playhead, always show timeline preview
     // Even if a library clip is currently selected/playing, timeline interaction takes priority
     // This allows users to preview timeline position while library clip is selected
-    if (timeline.length > 0 && isUserInteraction && currentPlayheadPosition >= 0) {
+    // BUT: Don't trigger clip loads if we're ending the sequence (let it finish naturally)
+    if (timeline.length > 0 && isUserInteraction && currentPlayheadPosition >= 0 && !isEndingSequenceRef.current) {
       // Calculate or get sequence to find which clip contains this position
       let seqToUse = sequence;
       if (seqToUse.length === 0) {
@@ -526,7 +693,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
       }
     }
-
+    
+    // NOTE: Sequence mode is handled at the TOP of this effect (line ~480)
+    // If we reach here, we're NOT in sequence mode, so handle other modes
+    
     // If in library mode and user hasn't clicked timeline, ignore timeline playhead changes
     // Library clips are independent - don't sync timeline playhead to them during playback
     if (currentMode === 'library' && !isUserSeek) {
@@ -544,69 +714,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       videoRef.current.pause();
       onPlayingChange(false);
       setPlayerState(prev => ({ ...prev, isPlaying: false }));
-    }
-
-    // Handle sequence mode playhead changes
-    if (isSequenceModeRef.current && sequence.length > 0) {
-      // Find which clip corresponds to the new playhead position
-      const newClipIndex = findCurrentClipInSequence(sequence, currentPlayheadPosition);
-      
-      if (newClipIndex >= 0 && newClipIndex < sequence.length) {
-        const targetItem = sequence[newClipIndex];
-        const localTime = getLocalTimeInClip(targetItem, currentPlayheadPosition);
-        const clampedLocalTime = Math.max(
-          targetItem.clip.trimStart,
-          Math.min(localTime, targetItem.clip.trimEnd)
-        );
-
-        // Check if we need to switch clips
-        if (newClipIndex !== currentSequenceIndex) {
-          console.log('[VideoPlayer] Sequence seek - switching to clip', newClipIndex, 'at time', clampedLocalTime);
-          
-          setCurrentSequenceIndex(newClipIndex);
-          setSequenceTime(currentPlayheadPosition);
-          setPlayerState(prev => ({
-            ...prev,
-            currentVideo: targetItem.libraryClip,
-            currentTimelineClip: targetItem.clip,
-            duration: targetItem.endTime - targetItem.startTime,
-            currentTime: currentPlayheadPosition,
-            isLoading: true,
-          }));
-          
-          // Video source will be updated by the effect watching currentVideo
-          // Don't auto-resume - user clicked to seek, let them press spacebar to resume
-        } else {
-          // Same clip, just seek
-          const currentItem = sequence[currentSequenceIndex];
-          if (currentItem && videoRef.current) {
-            const currentVideoTime = videoRef.current.currentTime || 0;
-            const diff = Math.abs(clampedLocalTime - currentVideoTime);
-            
-            if (diff > 0.1) {
-              console.log('[VideoPlayer] Sequence seek - same clip, seeking to', clampedLocalTime);
-              isExternalSeekRef.current = true;
-              videoRef.current.currentTime = clampedLocalTime;
-              setSequenceTime(currentPlayheadPosition);
-              
-              // Don't auto-resume - user clicked to seek, let them press spacebar to resume
-              
-              setTimeout(() => {
-                isExternalSeekRef.current = false;
-              }, 100);
-            }
-          }
-        }
-      }
-      // Update last playhead position after handling sequence mode
-      lastPlayheadPositionRef.current = currentPlayheadPosition;
-      return;
-    }
-
-    // Handle single clip mode (library or timeline clip)
-    if (isSequenceModeRef.current) {
-      lastPlayheadPositionRef.current = currentPlayheadPosition;
-      return;
     }
 
     // Library mode with no user seek already handled at top (non-user seeks ignored)
@@ -733,6 +840,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
    */
   const handleTimeUpdate = () => {
     if (!videoRef.current || isExternalSeekRef.current) return;
+    
+    // Debug: Log time updates in sequence mode
+    if (isSequenceModeRef.current) {
+      console.log('[VideoPlayer] Time update in sequence mode - videoTime:', videoRef.current.currentTime, 'isPlaying:', isPlaying);
+    }
 
     const videoCurrentTime = videoRef.current.currentTime || 0;
     let displayTime = videoCurrentTime;
@@ -746,20 +858,29 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         // Calculate how much time has elapsed within the trimmed clip
         // videoCurrentTime is the actual time in the source video file
         // We need to see if we've passed the trimEnd point
-        if (videoCurrentTime >= currentSequenceItem.clip.trimEnd) {
+        // Debug: Log sequence time updates
+        // console.log('[VideoPlayer] Sequence time update - videoCurrentTime:', videoCurrentTime, 'trimEnd:', currentSequenceItem.clip.trimEnd, 'currentIndex:', currentSequenceIndex);
+        // Add small tolerance for floating point precision issues
+        const tolerance = 0.1; // 100ms tolerance
+        if (videoCurrentTime >= (currentSequenceItem.clip.trimEnd - tolerance)) {
           // Current clip ended, transition to next
           const nextIndex = currentSequenceIndex + 1;
+          console.log('[VideoPlayer] Current clip ended, nextIndex:', nextIndex, 'sequence.length:', sequence.length);
           if (nextIndex < sequence.length) {
             const nextItem = sequence[nextIndex];
             console.log('[VideoPlayer] Sequence transition: clip', currentSequenceIndex, '->', nextIndex);
+            console.log('[VideoPlayer] Next item:', nextItem.libraryClip.filename);
             
             // Pause current video before switching to prevent flashing
             if (videoRef.current) {
               videoRef.current.pause();
             }
             
+            // Update sequence state and playhead position IMMEDIATELY to prevent jumping
             setCurrentSequenceIndex(nextIndex);
             setSequenceTime(nextItem.startTime);
+            onPlayheadChange(nextItem.startTime); // Update playhead immediately
+            
             setPlayerState(prev => ({
               ...prev,
               currentVideo: nextItem.libraryClip,
@@ -768,26 +889,43 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
               isLoading: true,
             }));
             
-            // Update playhead immediately
-            onPlayheadChange(nextItem.startTime);
-            
             // Video source will be updated by the effect watching currentVideo
             // Playback will continue automatically (handled in canplay event)
             return; // Skip rest of time update handling
           } else {
-            // Sequence ended - sync playhead to final position before pausing
-            const finalSequenceTime = currentSequenceItem.endTime;
-            console.log('[VideoPlayer] Sequence ended at:', finalSequenceTime);
+            // Sequence ended - keep showing last clip and sync playhead to final position
+            const totalSequenceDuration = calculateSequenceDuration(sequence);
+            
+            // Set flag to prevent playhead change from triggering unwanted clip loads
+            isEndingSequenceRef.current = true;
+            
             if (videoRef.current) {
+              // Seek to the end of the last clip (trimEnd) and pause
+              const lastItem = sequence[sequence.length - 1];
+              videoRef.current.currentTime = lastItem.clip.trimEnd;
               videoRef.current.pause();
             }
+            
             // Sync playhead to end of sequence
-            setSequenceTime(finalSequenceTime);
-            onPlayheadChange(finalSequenceTime);
+            setSequenceTime(totalSequenceDuration);
+            onPlayheadChange(totalSequenceDuration);
             onPlayingChange(false);
-            setPlayerState(prev => ({ ...prev, isPlaying: false }));
-            isSequenceModeRef.current = false;
-            setCurrentSequenceIndex(-1);
+            
+            // Keep the last clip visible (don't clear currentVideo or currentTimelineClip)
+            // Just update playing state - keep sequence mode active so clip stays loaded
+            setPlayerState(prev => ({ 
+              ...prev, 
+              isPlaying: false,
+              currentTime: totalSequenceDuration,
+            }));
+            
+            // Clear the flag after a short delay to allow normal interactions again
+            setTimeout(() => {
+              isEndingSequenceRef.current = false;
+            }, 500);
+            
+            // Don't clear sequence mode immediately - let user see the last frame
+            // Will be cleared when user interacts with timeline
             return; // Skip rest of time update handling
           }
         }
@@ -860,9 +998,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
    * Handle video ended
    */
   const handleEnded = () => {
+    console.log('[VideoPlayer] Video ended event fired, isSequenceMode:', isSequenceModeRef.current);
     // In sequence mode, transitions are handled by handleTimeUpdate
     // The ended event might fire briefly during transitions, so ignore it
     if (isSequenceModeRef.current) {
+      console.log('[VideoPlayer] Ignoring ended event in sequence mode');
       return;
     }
 
@@ -1011,6 +1151,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     setSequenceTime(startSequenceTime);
 
     console.log('[VideoPlayer] Starting sequence preview from time:', startSequenceTime, 'clip index:', startClipIndex);
+    console.log('[VideoPlayer] Sequence length:', finalSequence.length);
+    finalSequence.forEach((item, index) => {
+      console.log(`[VideoPlayer] Sequence item ${index}:`, item.libraryClip.filename, 'trimStart:', item.clip.trimStart, 'trimEnd:', item.clip.trimEnd);
+    });
 
     // Set state first to trigger video element render
     setPlayerState(prev => ({
@@ -1321,13 +1465,29 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   return (
     <div className="preview-panel">
-      {/* Sequence Preview Button */}
+      {/* Sequence Preview Button and Export Button */}
       <div className="sequence-preview-container">
         <SequencePreviewButton
           isEmpty={timeline.length === 0}
           onClick={handleSequencePreview}
         />
+        <button
+          className="export-button"
+          onClick={handleExportClick}
+          disabled={timeline.length === 0 || exportHook.isExporting}
+          aria-label="Export video"
+          style={{ marginLeft: '8px' }}
+        >
+          {exportHook.isExporting ? 'Exporting...' : 'Export Video'}
+        </button>
       </div>
+
+      {/* Export Progress Bar */}
+      <ExportProgressBar
+        progress={exportHook.progress}
+        isExporting={exportHook.isExporting}
+        error={exportHook.error}
+      />
 
       {/* Video container with 16:9 aspect ratio */}
       <div className="video-container">
@@ -1344,8 +1504,14 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           <>
             {/* Always render video element when currentVideo exists (so ref is available) */}
             <video
+              key={playerState.currentVideo?.id || 'no-video'}
               ref={videoRef}
               className="video-element"
+              src={playerState.currentVideo ? 
+                (playerState.currentVideo.path.startsWith('/') 
+                  ? `file://${encodeURI(playerState.currentVideo.path).replace(/#/g, '%23')}`
+                  : `file:///${encodeURI(playerState.currentVideo.path).replace(/#/g, '%23')}`) 
+                : ''}
               onLoadedMetadata={handleLoadedMetadata}
               onTimeUpdate={handleTimeUpdate}
               onEnded={handleEnded}
@@ -1377,6 +1543,16 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         onPlayPause={handlePlayPause}
         onSeek={handleSeek}
         disabled={!playerState.currentVideo}
+      />
+
+      {/* Export Dialog */}
+      <ExportDialog
+        isOpen={showExportDialog}
+        success={exportHook.outputPath !== null}
+        filePath={exportHook.outputPath}
+        error={exportHook.error}
+        onClose={handleExportDialogClose}
+        onReveal={handleRevealInFinder}
       />
     </div>
   );
