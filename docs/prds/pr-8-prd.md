@@ -151,20 +151,27 @@ Reference `prd-v1.md` for detailed performance targets:
 
 ## 8. Data Model
 
-**Export State** (added to AppState):
+**Export State** (implementation note: partially in AppState, partially in hook):
+
+The PRD originally specified all export state in AppState, but implementation uses a hybrid approach:
+
 ```typescript
+// In AppState (src/types/video.ts)
 interface AppState {
   // ... existing fields ...
   /** Export in progress flag */
   isExporting: boolean;
   /** Export progress percentage (0-100) */
   exportProgress: number;
-  /** Export error message (null if no error) */
-  exportError: string | null;
-  /** Export output file path (set when export completes) */
-  exportOutputPath: string | null;
+  // Note: exportError and exportOutputPath managed in useExport hook instead
 }
+
+// In useExport hook (src/hooks/useExport.ts) - component-level state
+const [error, setError] = useState<string | null>(null);
+const [outputPath, setOutputPath] = useState<string | null>(null);
 ```
+
+**Architectural Rationale**: Since export state is only needed by the VideoPlayer component (not globally), it's managed in the `useExport` hook to avoid unnecessary state lifting and prop drilling. This keeps state colocated with its usage and simplifies the component tree. If future requirements need global access to export error/path, it can be lifted to AppState.
 
 **Export Parameters** (new interface):
 ```typescript
@@ -291,7 +298,7 @@ window.electron.revealInFinder(
 **Modify**:
 - `src/components/VideoPlayer.tsx` — Add "Export Video" button, wire up export functionality
 - `src/components/PlayerControls.tsx` — Add export button to controls (if needed)
-- `src/App.tsx` — Add export state (isExporting, exportProgress, exportError, exportOutputPath) to AppState
+- `src/App.tsx` — Add export state (isExporting, exportProgress) to AppState; exportError/exportOutputPath managed in useExport hook (see Data Model section for rationale)
 - `src/main/ipcHandlers.ts` — Add export IPC handlers (export:start, export:showSaveDialog, export:revealInFinder)
 - `src/main/ffmpeg.ts` — Add export functions (generateExportCommand, parseFFmpegProgress, cleanupTempFiles)
 - `src/preload.ts` — Add export API to contextBridge (exportVideo, onExportProgress, showSaveDialog, revealInFinder)
