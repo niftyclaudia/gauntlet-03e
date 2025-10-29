@@ -557,7 +557,7 @@ npm start  # Launch dev mode
 - Add "Reveal in Finder" button
 - Validation: Export produces playable MP4 with all clips in sequence
 
-### Phase 9: Polish & Testing
+### Phase 9: Polish & Testing PUSHED TO LATER
 - Test with different video formats (MP4, MOV)
 - Test with videos of different resolutions
 - Test edge cases (very short clips, very long clips)
