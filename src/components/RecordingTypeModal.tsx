@@ -15,6 +15,8 @@ interface RecordingTypeModalProps {
   onSelectScreenRecording: () => void;
   /** Callback when webcam recording is selected */
   onSelectWebcamRecording: () => void;
+  /** Callback when PiP recording is selected */
+  onSelectPiPRecording: () => void;
 }
 
 const RecordingTypeModal: React.FC<RecordingTypeModalProps> = ({
@@ -22,6 +24,7 @@ const RecordingTypeModal: React.FC<RecordingTypeModalProps> = ({
   onClose,
   onSelectScreenRecording,
   onSelectWebcamRecording,
+  onSelectPiPRecording,
 }) => {
   if (!isOpen) return null;
 
@@ -72,6 +75,24 @@ const RecordingTypeModal: React.FC<RecordingTypeModalProps> = ({
                 <h3 className="recording-option-title">Webcam Recording</h3>
                 <p className="recording-option-description">
                   Record using your camera
+                </p>
+              </div>
+            </button>
+            
+            <button
+              className="recording-option"
+              onClick={onSelectPiPRecording}
+            >
+              <div className="recording-option-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5l-1-1H3V5h18v12h-5l1 1h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2z"/>
+                  <circle cx="18" cy="8" r="3"/>
+                </svg>
+              </div>
+              <div className="recording-option-content">
+                <h3 className="recording-option-title">Picture-in-Picture</h3>
+                <p className="recording-option-description">
+                  Record screen and webcam together
                 </p>
               </div>
             </button>
