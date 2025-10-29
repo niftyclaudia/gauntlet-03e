@@ -269,6 +269,36 @@ export interface ElectronAPI {
      */
     checkMicrophonePermission: () => Promise<boolean>;
   };
+
+  /**
+   * PiP recording API
+   */
+  pip: {
+    /**
+     * Start PiP recording session
+     */
+    startRecording: (settings: {
+      screenId: string;
+      position: 'TL' | 'TR' | 'BL' | 'BR';
+      size: 'small' | 'medium' | 'large';
+      shape: 'rectangle' | 'circle';
+      audioMode: 'both' | 'screen-only' | 'webcam-only';
+    }) => Promise<{ success: boolean; sessionId?: string; error?: string }>;
+
+    /**
+     * Stop PiP recording and compose video
+     */
+    stopRecording: (data: {
+      sessionId: string;
+      screenData: string; // base64 encoded string
+      webcamData: string; // base64 encoded string
+    }) => Promise<{ success: boolean; filePath?: string; error?: string }>;
+
+    /**
+     * Get PiP session information
+     */
+    getSession: (sessionId: string) => Promise<{ success: boolean; session?: any; error?: string }>;
+  };
 }
 
 declare global {
