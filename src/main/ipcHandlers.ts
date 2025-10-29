@@ -4,8 +4,8 @@
  * These handlers are invoked from the renderer process via window.electron API
  */
 
-import { ipcMain, dialog } from 'electron';
-import { extractMetadata, generateThumbnail } from './ffmpeg';
+import { ipcMain, dialog, BrowserWindow, shell } from 'electron';
+import { extractMetadata, generateThumbnail, exportVideoSequence, calculateExportSettings } from './ffmpeg';
 import { 
   validateFileExists, 
   ensureThumbnailDirectory, 
@@ -15,7 +15,9 @@ import {
   deleteAutosaveFile,
   getAutosaveFileAge
 } from './fileSystem';
-import { VideoMetadata, SavedProjectState } from '../types/video';
+import { VideoMetadata, SavedProjectState, TimelineClip, VideoClip } from '../types/video';
+import * as path from 'path';
+import * as os from 'os';
 
 /**
  * Register all IPC handlers
@@ -325,6 +327,129 @@ export function registerIpcHandlers(): void {
     } catch (error) {
       console.error('[IPC] Trim validation error:', error);
       throw error;
+    }
+  });
+
+  /**
+   * Handler: export:showSaveDialog
+   * Opens native save dialog for export file
+   * Returns: Promise<string | null> (file path or null if cancelled)
+   */
+  ipcMain.handle('export:showSaveDialog', async (_event, defaultFilename: string): Promise<string | null> => {
+    try {
+      const result = await dialog.showSaveDialog({
+        title: 'Export Video',
+        defaultPath: path.join(os.homedir(), 'Documents', defaultFilename),
+        filters: [
+          { name: 'MP4 Video', extensions: ['mp4'] }
+        ],
+        buttonLabel: 'Export',
+      });
+
+      if (result.canceled || !result.filePath) {
+        return null;
+      }
+
+      // Ensure .mp4 extension
+      let filePath = result.filePath;
+      if (!filePath.endsWith('.mp4')) {
+        filePath = `${filePath}.mp4`;
+      }
+
+      console.log(`[IPC] Export save location: ${filePath}`);
+      return filePath;
+    } catch (error) {
+      console.error('[IPC] Export save dialog error:', error);
+      throw new Error(`Failed to open save dialog: ${error}`);
+    }
+  });
+
+  /**
+   * Handler: export:start
+   * Initiates video export process
+   * Params: clips (TimelineClip[]), libraryClips (VideoClip[]), outputPath (string)
+   * Returns: Promise<void>
+   * Progress: Emits 'export:progress' events via IPC (0-100)
+   */
+  ipcMain.handle('export:start', async (
+    event,
+    clips: TimelineClip[],
+    libraryClips: VideoClip[],
+    outputPath: string,
+    projectState?: SavedProjectState
+  ): Promise<void> => {
+    try {
+      // Validate inputs
+      if (!clips || clips.length === 0) {
+        throw new Error('Cannot export: timeline is empty');
+      }
+      if (!libraryClips || libraryClips.length === 0) {
+        throw new Error('Cannot export: no library clips provided');
+      }
+      if (!outputPath || typeof outputPath !== 'string') {
+        throw new Error('Invalid output path');
+      }
+
+      // Trigger auto-save before export (if project state provided)
+      if (projectState) {
+        try {
+          writeAutosaveFile(projectState);
+          console.log('[IPC] Auto-saved project state before export');
+        } catch (saveError) {
+          console.error('[IPC] Failed to auto-save before export:', saveError);
+          // Don't throw - export can proceed without auto-save
+        }
+      }
+
+      // Calculate export settings
+      const settings = calculateExportSettings(clips, libraryClips);
+      console.log('[IPC] Export settings:', settings);
+
+      // Get the main window to send progress events
+      const mainWindow = BrowserWindow.getAllWindows()[0];
+      if (!mainWindow) {
+        throw new Error('Main window not found');
+      }
+
+      // Export with progress tracking
+      await exportVideoSequence(
+        {
+          clips,
+          libraryClips,
+          outputPath,
+          settings,
+        },
+        (progress) => {
+          // Emit progress event to renderer
+          mainWindow.webContents.send('export:progress', progress);
+        }
+      );
+
+      console.log('[IPC] Export completed successfully');
+    } catch (error) {
+      console.error('[IPC] Export error:', error);
+      throw error;
+    }
+  });
+
+  /**
+   * Handler: export:revealInFinder
+   * Opens macOS Finder to file location
+   * Params: filePath (string)
+   * Returns: Promise<void>
+   */
+  ipcMain.handle('export:revealInFinder', async (_event, filePath: string): Promise<void> => {
+    try {
+      if (!filePath || typeof filePath !== 'string') {
+        throw new Error('Invalid file path');
+      }
+
+      // Use shell.showItemInFolder for macOS
+      shell.showItemInFolder(filePath);
+      console.log(`[IPC] Revealed file in Finder: ${filePath}`);
+    } catch (error) {
+      console.error('[IPC] Failed to reveal file in Finder:', error);
+      // Don't throw - Finder reveal failure shouldn't break the app
     }
   });
 
