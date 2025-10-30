@@ -9,6 +9,9 @@ import React, { useRef, useEffect, useState } from 'react';
 import { TimelineClip, VideoClip } from '../types/video';
 import TimelineClipCard from './TimelineClipCard';
 import TimelineZoomControls from './TimelineZoomControls';
+import TimelineSplitButton from './TimelineSplitButton';
+import SnapIndicator from './SnapIndicator';
+import CutLine from './CutLine';
 import Playhead from './Playhead';
 import TimeRuler from './TimeRuler';
 import TrimTooltip from './TrimTooltip';
@@ -49,6 +52,10 @@ interface TimelineProps {
   totalDuration?: number;
   /** Callback when trim values are updated */
   onTrimUpdate?: (clipId: string, trimStart: number, trimEnd: number) => void;
+  /** Callback when split button is clicked */
+  onSplitClip?: () => void;
+  /** Whether playhead is currently over a clip */
+  isPlayheadOverClip?: boolean;
 }
 
 const Timeline: React.FC<TimelineProps> = ({
@@ -67,6 +74,8 @@ const Timeline: React.FC<TimelineProps> = ({
   onScrollChange,
   onPlayheadChange,
   onTrimUpdate,
+  onSplitClip,
+  isPlayheadOverClip = false,
 }) => {
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const clipsContainerRef = useRef<HTMLDivElement>(null);
@@ -80,6 +89,7 @@ const Timeline: React.FC<TimelineProps> = ({
   const isDraggingPlayheadRef = useRef(false); // Track if playhead is being dragged
   const dragEndTimeRef = useRef(0); // Track when drag ended to prevent click after drag
   const [hoveredEdge, setHoveredEdge] = useState<{ clipId: string; edge: 'left' | 'right' } | null>(null);
+  const [snapIndicatorPosition, setSnapIndicatorPosition] = useState<number | null>(null);
 
   // Trim drag hook for centralized state management
   const trimDrag = useTrimDrag(timelineZoom);
@@ -493,17 +503,31 @@ const Timeline: React.FC<TimelineProps> = ({
       const clipStartX = calculateClipPosition(clipIndex, sortedTimeline, library, timelineZoom);
       const clipRelativeMouseX = absoluteMouseX - clipStartX;
 
-      // Update trim drag position
+      // Update trim drag position with automatic smart snapping
       trimDrag.handleTrimMove(
         clipRelativeMouseX,
         libraryClip.duration,
         e.clientX,
         e.clientY,
-        clipStartX
+        clipStartX,
+        true, // Always enable snapping
+        '1sec', // Default to 1-second intervals
+        libraryClip.metadata.framerate
       );
+
+      // Update snap indicator position if snap is active
+      if (trimDrag.isSnapped) {
+        const snapTime = trimDrag.dragging?.edge === 'left' 
+          ? (trimDrag.draggedInPoint ?? clip.trimStart)
+          : (trimDrag.draggedOutPoint ?? clip.trimEnd);
+        const snapPosition = clipStartX + (snapTime * timelineZoom * 10);
+        setSnapIndicatorPosition(snapPosition);
+      } else {
+        setSnapIndicatorPosition(null);
+      }
     };
 
-    const handleGlobalMouseUp = async (e: MouseEvent) => {
+    const handleGlobalMouseUp = async () => {
       if (!trimDrag.dragging) return;
 
       const clipId = trimDrag.dragging.clipId;
@@ -600,6 +624,12 @@ const Timeline: React.FC<TimelineProps> = ({
           />
         </div>
         <div className="timeline-header-right">
+          <div className="timeline-controls">
+            <TimelineSplitButton
+              enabled={isPlayheadOverClip}
+              onClick={onSplitClip || (() => console.log('Split clicked'))}
+            />
+          </div>
           <span className="timeline-total-duration">
             Total: {formatDuration(totalDuration)}
           </span>
@@ -641,6 +671,20 @@ const Timeline: React.FC<TimelineProps> = ({
             onDrag={handlePlayheadDragChange}
             onDragEnd={handlePlayheadDragEnd}
             totalDuration={totalDuration}
+          />
+
+          {/* Snap Indicator */}
+          <SnapIndicator
+            position={snapIndicatorPosition || 0}
+            visible={snapIndicatorPosition !== null}
+            timelineHeight={110}
+          />
+
+          {/* Cut Line - shows where playhead will cut */}
+          <CutLine
+            position={currentPlayheadPosition * timelineZoom * 10} // Convert time to pixels
+            visible={isPlayheadOverClip}
+            timelineHeight={110}
           />
 
           {/* Drop zone before first clip (for library drag) */}
@@ -865,6 +909,9 @@ const Timeline: React.FC<TimelineProps> = ({
         const isExpanding = (trimDrag.draggedInPoint !== null && trimDrag.draggedInPoint < clip.trimStart) ||
                            (trimDrag.draggedOutPoint !== null && trimDrag.draggedOutPoint > clip.trimEnd);
 
+        const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
+        const framerate = libraryClip?.metadata.framerate || 30;
+
         return (
           <TrimTooltip
             originalDuration={originalDuration}
@@ -874,6 +921,9 @@ const Timeline: React.FC<TimelineProps> = ({
             isExpanding={isExpanding}
             isAtMinimum={trimDrag.isAtMinimum}
             isBelowMinimum={trimDrag.isBelowMinimum}
+            framerate={framerate}
+            currentTrimStart={trimDrag.draggedInPoint ?? trimDrag.fixedInPoint ?? clip.trimStart}
+            currentTrimEnd={trimDrag.draggedOutPoint ?? trimDrag.fixedOutPoint ?? clip.trimEnd}
           />
         );
       })()}
