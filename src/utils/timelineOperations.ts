@@ -106,3 +106,79 @@ export function removeClipFromTimeline(
   }));
 }
 
+/**
+ * Split a clip at the playhead position
+ * 
+ * @param clipId - ID of the clip to split
+ * @param playheadPosition - Current playhead position in seconds
+ * @param timeline - Current timeline array
+ * @param library - Library clips array
+ * @returns New timeline array with clip split into two segments
+ */
+export function splitClipAtPlayhead(
+  clipId: string,
+  playheadPosition: number,
+  timeline: TimelineClip[],
+  library: VideoClip[]
+): TimelineClip[] {
+  // Find clip to split
+  const clipIndex = timeline.findIndex(c => c.id === clipId);
+  const clip = timeline[clipIndex];
+  
+  if (!clip) {
+    console.warn(`[timelineOperations] Clip ${clipId} not found for split`);
+    return timeline;
+  }
+
+  const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
+  if (!libraryClip) {
+    console.warn(`[timelineOperations] Library clip ${clip.libraryClipId} not found for split`);
+    return timeline;
+  }
+
+  // Calculate clip start time in timeline (cumulative time before this clip)
+  let timelineStartTime = 0;
+  for (let i = 0; i < clipIndex; i++) {
+    const prevClip = timeline[i];
+    const prevLibraryClip = library.find(lc => lc.id === prevClip.libraryClipId);
+    if (prevLibraryClip) {
+      timelineStartTime += prevClip.trimEnd - prevClip.trimStart;
+    }
+  }
+
+  // Calculate local playhead position within the clip
+  const localPlayheadTime = playheadPosition - timelineStartTime;
+  
+  // Validate split point (minimum 1 second segments)
+  const minDuration = 1.0;
+  if (localPlayheadTime < clip.trimStart + minDuration || 
+      localPlayheadTime > clip.trimEnd - minDuration) {
+    console.warn(`[timelineOperations] Cannot split clip - split point too close to edges`);
+    return timeline;
+  }
+
+  // Create two segments
+  const segment1: TimelineClip = {
+    id: uuidv4(),
+    libraryClipId: clip.libraryClipId,
+    trimStart: clip.trimStart,
+    trimEnd: localPlayheadTime,
+    order: clip.order
+  };
+
+  const segment2: TimelineClip = {
+    id: uuidv4(),
+    libraryClipId: clip.libraryClipId,
+    trimStart: localPlayheadTime,
+    trimEnd: clip.trimEnd,
+    order: clip.order + 1
+  };
+
+  // Insert segments and reorder
+  const newTimeline = [...timeline];
+  newTimeline.splice(clipIndex, 1, segment1, segment2);
+  
+  // Recalculate order properties for all clips
+  return newTimeline.map((c, i) => ({ ...c, order: i }));
+}
+
