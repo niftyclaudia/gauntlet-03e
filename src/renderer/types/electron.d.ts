@@ -299,6 +299,30 @@ export interface ElectronAPI {
      */
     getSession: (sessionId: string) => Promise<{ success: boolean; session?: any; error?: string }>;
   };
+
+  /**
+   * AI script generation API
+   */
+  ai: {
+    /**
+     * Generates script using OpenAI API
+     * @param topic - User-provided topic
+     * @param duration - Requested duration in seconds
+     * @param format - Optional format preference ('bullets' | 'paragraphs')
+     * @param feedback - Optional feedback for regeneration
+     * @returns Generated script with metadata
+     */
+    generateScript: (
+      topic: string,
+      duration: number,
+      format?: 'bullets' | 'paragraphs',
+      feedback?: string
+    ) => Promise<{
+      script: string;
+      wordCount: number;
+      estimatedReadTime: number;
+    }>;
+  };
 }
 
 declare global {
