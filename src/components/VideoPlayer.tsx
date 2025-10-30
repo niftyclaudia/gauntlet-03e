@@ -11,6 +11,7 @@ import PlayerControls from './PlayerControls';
 import SequencePreviewButton from './SequencePreviewButton';
 import ExportProgressBar from './ExportProgressBar';
 import ExportDialog from './ExportDialog';
+import AdvancedExportDialog from './AdvancedExportDialog';
 import RecordButton from './RecordButton';
 import { useExport } from '../hooks/useExport';
 import {
@@ -103,12 +104,30 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   const exportHook = useExport();
   const isExportingRef = useRef(exportHook.isExporting); // Keep ref in sync for keyboard handler
   const [showExportDialog, setShowExportDialog] = useState(false);
+  const [showAdvancedExportDialog, setShowAdvancedExportDialog] = useState(false);
   const wasExportingRef = useRef(false); // Track previous exporting state to detect completion
 
   /**
-   * Handle export button click
+   * Handle export button click - show advanced export dialog
    */
-  const handleExportClick = useCallback(async () => {
+  const handleExportClick = useCallback(() => {
+    if (timeline.length === 0) {
+      console.log('[VideoPlayer] Cannot export: timeline is empty');
+      return;
+    }
+    
+    if (exportHook.isExporting) {
+      console.log('[VideoPlayer] Export already in progress');
+      return;
+    }
+    
+    setShowAdvancedExportDialog(true);
+  }, [timeline.length, exportHook.isExporting]);
+
+  /**
+   * Handle advanced export start
+   */
+  const handleAdvancedExportStart = useCallback(async (advancedSettings: any) => {
     try {
       // Get project state for auto-save before export (if callback provided)
       let projectState = undefined;
@@ -121,13 +140,24 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         }
       }
       
-      // Start export (dialog will be shown via useEffect when export completes)
-      await exportHook.startExport(timeline, library, projectState);
+      // Start export with advanced settings
+      await exportHook.startExport(timeline, library, projectState, advancedSettings);
+      setShowAdvancedExportDialog(false);
     } catch (error) {
       console.error('[VideoPlayer] Export failed:', error);
       // Error state will be set in exportHook, useEffect will show dialog
     }
   }, [timeline, library, exportHook, onBeforeExport]);
+
+  /**
+   * Handle advanced export cancel
+   */
+  const handleAdvancedExportCancel = useCallback(() => {
+    if (exportHook.isExporting) {
+      exportHook.reset();
+    }
+    setShowAdvancedExportDialog(false);
+  }, [exportHook]);
 
   /**
    * Show export dialog when export completes (success or error)
@@ -1539,7 +1569,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           aria-label="Export video"
           style={{ marginLeft: '8px' }}
         >
-          {exportHook.isExporting ? 'Exporting...' : 'Export Video'}
+          {exportHook.isExporting ? 'Exporting...' : 'Export'}
         </button>
       </div>
 
@@ -1604,6 +1634,19 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         onPlayPause={handlePlayPause}
         onSeek={handleSeek}
         disabled={!playerState.currentVideo}
+      />
+
+      {/* Advanced Export Dialog */}
+      <AdvancedExportDialog
+        isOpen={showAdvancedExportDialog}
+        clips={timeline}
+        libraryClips={library}
+        exportProgress={exportHook.progress}
+        isExporting={exportHook.isExporting}
+        exportError={exportHook.error}
+        onClose={handleAdvancedExportCancel}
+        onStartExport={handleAdvancedExportStart}
+        onCancelExport={handleAdvancedExportCancel}
       />
 
       {/* Export Dialog */}

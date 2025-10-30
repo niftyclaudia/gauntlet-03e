@@ -20,6 +20,9 @@ const ExportProgressBar: React.FC<ExportProgressBarProps> = ({
   isExporting,
   error,
 }) => {
+  // Debug logging
+  console.log('[ExportProgressBar] Props:', { progress, isExporting, error });
+  
   if (!isExporting && !error) {
     return null; // Hidden when not exporting
   }
