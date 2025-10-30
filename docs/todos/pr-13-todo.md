@@ -33,27 +33,27 @@
 
 Implement deterministic Electron IPC handlers from PRD Section 9.
 
-- [ ] Implement `get-screens` IPC handler in main process
+- [x] Implement `get-screens` IPC handler in main process
   - Test Gate: Handler returns list of available screens with thumbnails
-- [ ] Implement `check-camera-available` IPC handler in main process
+- [x] Implement `check-camera-available` IPC handler in main process
   - Test Gate: Handler correctly detects camera availability and permission status
-- [ ] Implement `get-pip-settings` IPC handler in main process
+- [x] Implement `get-pip-settings` IPC handler in main process
   - Test Gate: Handler returns saved settings or defaults
-- [ ] Implement `start-pip-recording` IPC handler in main process
+- [x] Implement `start-pip-recording` IPC handler in main process
   - Test Gate: Handler initiates both screen and webcam recording simultaneously
-- [ ] Implement `stop-pip-recording` IPC handler in main process
+- [x] Implement `stop-pip-recording` IPC handler in main process
   - Test Gate: Handler stops both streams and returns temp file paths
-- [ ] Implement `composite-pip-videos` IPC handler in main process
+- [x] Implement `composite-pip-videos` IPC handler in main process
   - Test Gate: Handler creates composite video using FFmpeg overlay filter
-- [ ] Implement `save-pip-settings` IPC handler in main process
+- [x] Implement `save-pip-settings` IPC handler in main process
   - Test Gate: Handler persists settings to session.json
-- [ ] Implement `get-media-devices` IPC handler in main process
+- [x] Implement `get-media-devices` IPC handler in main process
   - Test Gate: Handler returns available cameras and microphones with labels
-- [ ] Implement `check-permissions` IPC handler in main process
+- [x] Implement `check-permissions` IPC handler in main process
   - Test Gate: Handler returns permission status for screen, camera, and microphone
-- [ ] Implement `refresh-devices` IPC handler in main process
+- [x] Implement `refresh-devices` IPC handler in main process
   - Test Gate: Handler refreshes device list and returns updated devices
-- [ ] Add validation logic for all handlers
+- [x] Add validation logic for all handlers
   - Test Gate: Edge cases handled correctly, proper error messages returned
 
 ---

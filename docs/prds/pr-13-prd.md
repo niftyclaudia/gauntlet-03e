@@ -27,9 +27,9 @@ Picture-in-Picture Recording enables educators and presenters to simultaneously 
 - **What video editing problem are we solving?** Content creators and educators need to record both their screen activity and their face simultaneously for tutorials, presentations, and educational content. Currently they must use separate tools or complex setups.
 - **Why now?** Screen recording (PR-11) and webcam recording (PR-12) are complete, providing the foundation for simultaneous capture. PiP recording is the natural next step to combine both capabilities.
 - **Goals (ordered, measurable):**
-  - [ ] G1 — Enable simultaneous screen + webcam recording with configurable overlay positioning
-  - [ ] G2 — Achieve <100ms audio/video sync drift and 30fps+ recording performance
-  - [ ] G3 — Provide intuitive settings configuration with live preview
+  - [x] G1 — Enable simultaneous screen + webcam recording with configurable overlay positioning
+  - [x] G2 — Achieve <100ms audio/video sync drift and 30fps+ recording performance
+  - [x] G3 — Provide intuitive settings configuration with live preview
 
 ---
 
