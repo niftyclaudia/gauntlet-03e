@@ -79,6 +79,7 @@ const Timeline: React.FC<TimelineProps> = ({
 }) => {
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const clipsContainerRef = useRef<HTMLDivElement>(null);
+  const rulerRef = useRef<HTMLDivElement>(null);
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isDraggingFromLibrary, setIsDraggingFromLibrary] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
@@ -145,13 +146,26 @@ const Timeline: React.FC<TimelineProps> = ({
   const handleScroll = () => {
     isUserScrollingRef.current = true;
     if (timelineContainerRef.current) {
-      onScrollChange(timelineContainerRef.current.scrollLeft);
+      const scrollLeft = timelineContainerRef.current.scrollLeft;
+      onScrollChange(scrollLeft);
+      
+      // Sync ruler scroll with timeline scroll
+      if (rulerRef.current) {
+        rulerRef.current.scrollLeft = scrollLeft;
+      }
     }
     // Reset flag after a short delay
     setTimeout(() => {
       isUserScrollingRef.current = false;
     }, 100);
   };
+  
+  // Sync ruler scroll when timeline scroll position changes externally
+  useEffect(() => {
+    if (rulerRef.current && timelineContainerRef.current && !isUserScrollingRef.current) {
+      rulerRef.current.scrollLeft = timelineContainerRef.current.scrollLeft;
+    }
+  }, [timelineScrollPosition]);
 
   // Handle drag from Library
   const handleDragOver = (e: React.DragEvent) => {
@@ -616,12 +630,6 @@ const Timeline: React.FC<TimelineProps> = ({
       {/* Header with total duration and Clear All button */}
       <div className="timeline-header">
         <div className="timeline-header-left">
-          <TimeRuler
-            currentTime={currentPlayheadPosition}
-            zoom={timelineZoom}
-            totalDuration={totalDuration}
-            timelineWidth={timelineContainerRef.current?.clientWidth || 0}
-          />
         </div>
         <div className="timeline-header-right">
           <div className="timeline-controls">
@@ -643,244 +651,292 @@ const Timeline: React.FC<TimelineProps> = ({
         </div>
       </div>
 
-      {/* Timeline container with clips */}
-      <div
-        ref={timelineContainerRef}
-        className={`timeline-container ${isDraggingFromLibrary ? 'timeline-drag-over' : ''}`}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-        onClick={handleTimelineClick}
-        onScroll={handleScroll}
-      >
-        {/* Clips container */}
-        <div
-          ref={clipsContainerRef}
-          className="timeline-clips-container"
-          style={{
-            position: 'relative',
-            minHeight: '110px', // Fixed height: 80px clip + 30px for filename/padding
-            minWidth: `${totalDuration * timelineZoom * 10}px`, // 10 pixels per second at 100% zoom - width scales with zoom
-          }}
-        >
-          {/* Playhead */}
-          <Playhead
-            position={currentPlayheadPosition}
-            zoom={timelineZoom}
-            timelineHeight={110}
-            onDrag={handlePlayheadDragChange}
-            onDragEnd={handlePlayheadDragEnd}
-            totalDuration={totalDuration}
-          />
+      {/* Two-column content wrapper */}
+      <div className="timeline-content">
+        {/* Left column: Track controls */}
+        <div className="timeline-controls-column" tabIndex={-1}>
+          <div className="timeline-track-row" tabIndex={-1}>
+            <div className="track-control-header" tabIndex={-1}>
+              <div className="track-header-placeholder" tabIndex={-1}>Track 1</div>
+            </div>
+          </div>
+        </div>
 
-          {/* Snap Indicator */}
-          <SnapIndicator
-            position={snapIndicatorPosition || 0}
-            visible={snapIndicatorPosition !== null}
-            timelineHeight={110}
-          />
+        {/* Right column: Timeline */}
+        <div className="timeline-track-column">
+          {/* Time Ruler */}
+          <div 
+            ref={rulerRef} 
+            className="timeline-ruler-wrapper" 
+            style={{ 
+              position: 'relative', 
+              overflowX: 'auto',
+              overflowY: 'hidden',
+              width: '100%'
+            }}
+            onScroll={(e) => {
+              const scrollLeft = (e.target as HTMLElement).scrollLeft;
+              // Sync timeline scroll with ruler scroll
+              if (timelineContainerRef.current) {
+                timelineContainerRef.current.scrollLeft = scrollLeft;
+                onScrollChange(scrollLeft);
+              }
+            }}
+          >
+            <TimeRuler
+              currentTime={currentPlayheadPosition}
+              zoom={timelineZoom}
+              totalDuration={totalDuration}
+              timelineWidth={timelineContainerRef.current?.clientWidth || 800}
+              scrollPosition={timelineScrollPosition}
+              onSeek={(time) => {
+                if (onPlayheadChange) {
+                  onPlayheadChange(time);
+                }
+              }}
+            />
+          </div>
+          {/* Timeline container with clips */}
+          <div
+            ref={timelineContainerRef}
+            className={`timeline-container ${isDraggingFromLibrary ? 'timeline-drag-over' : ''}`}
+            onDragOver={handleDragOver}
+            onDragLeave={handleDragLeave}
+            onDrop={handleDrop}
+            onClick={handleTimelineClick}
+            onScroll={handleScroll}
+          >
+            {/* Playhead - positioned relative to timeline-container to avoid clipping */}
+            <Playhead
+              position={currentPlayheadPosition}
+              zoom={timelineZoom}
+              timelineHeight={110}
+              onDrag={handlePlayheadDragChange}
+              onDragEnd={handlePlayheadDragEnd}
+              totalDuration={totalDuration}
+            />
 
-          {/* Cut Line - shows where playhead will cut */}
-          <CutLine
-            position={currentPlayheadPosition * timelineZoom * 10} // Convert time to pixels
-            visible={isPlayheadOverClip}
-            timelineHeight={110}
-          />
+            {/* Snap Indicator - positioned relative to timeline-container */}
+            <SnapIndicator
+              position={snapIndicatorPosition || 0}
+              visible={snapIndicatorPosition !== null}
+              timelineHeight={110}
+            />
 
-          {/* Drop zone before first clip (for library drag) */}
-          {isDraggingFromLibrary && libraryInsertIndex === 0 && (
+            {/* Cut Line - positioned relative to timeline-container */}
+            <CutLine
+              position={currentPlayheadPosition * timelineZoom * 10} // Convert time to pixels
+              visible={false} // Disabled since playhead now shows red color when over clip
+              timelineHeight={110}
+            />
+
+            {/* Clips container */}
             <div
+              ref={clipsContainerRef}
+              className="timeline-clips-container"
               style={{
-                position: 'absolute',
-                left: '0px',
-                top: '20px',
-                width: '30px',
-                height: '110px',
-                zIndex: 20,
-                pointerEvents: 'none',
+                position: 'relative',
+                minHeight: '110px', // Fixed height: 80px clip + 30px for filename/padding
+                minWidth: `${totalDuration * timelineZoom * 10}px`, // 10 pixels per second at 100% zoom - width scales with zoom
               }}
             >
-              <div className="timeline-drop-indicator" />
-            </div>
-          )}
 
-          {/* Clip cards */}
-          {sortedTimeline.map((clip, index) => {
-            const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
-            if (!libraryClip) return null;
-
-            // Check if this clip is being trimmed and calculate adjusted position
-            const isThisClipTrimming = trimDrag.dragging?.clipId === clip.id;
-            const isLeftHandleDragging = isThisClipTrimming && trimDrag.dragging?.edge === 'left';
-            // Check if this clip's trim handle is hovered
-            const isThisClipHovered = hoveredEdge?.clipId === clip.id;
-            // Raise z-index if trimming or hovered to prevent other clips from blocking trim handles
-            const shouldRaiseZIndex = isThisClipTrimming || isThisClipHovered;
-            
-            // Calculate base clip position (from cumulative widths of previous clips)
-            let clipPosition = calculateClipPosition(index, sortedTimeline, library, timelineZoom);
-            
-            // Calculate clip width with current (or dragged) trim values
-            let displayTrimStart = clip.trimStart;
-            let displayTrimEnd = clip.trimEnd;
-            
-            if (isThisClipTrimming) {
-              displayTrimStart = trimDrag.draggedInPoint ?? trimDrag.fixedInPoint ?? clip.trimStart;
-              displayTrimEnd = trimDrag.draggedOutPoint ?? trimDrag.fixedOutPoint ?? clip.trimEnd;
-            }
-            
-            // Calculate width with displayed trim values
-            const displayClip = { ...clip, trimStart: displayTrimStart, trimEnd: displayTrimEnd };
-            const clipWidth = applyClipWidthConstraints(calculateClipWidth(displayClip, libraryClip, timelineZoom));
-            
-            // If dragging left handle, adjust position to keep right edge fixed
-            // Right edge position = originalPosition + originalWidth
-            // To keep right edge fixed: newPosition = rightEdgePosition - newWidth
-            if (isLeftHandleDragging && trimDrag.dragging && trimDrag.dragging.initialClipWidth > 0) {
-              const originalWidth = trimDrag.dragging.initialClipWidth;
-              const rightEdgePosition = trimDrag.dragging.initialClipStartX + originalWidth;
-              clipPosition = rightEdgePosition - clipWidth;
-            }
-
-            return (
-              <React.Fragment key={clip.id}>
-                {/* Drop zone before this clip (for reordering or library drag) */}
-                {((isReordering && draggedClipIndex !== null && draggedClipIndex !== index) ||
-                  (isDraggingFromLibrary && libraryInsertIndex === index)) && (
-                  <div
-                    style={{
-                      position: 'absolute',
-                      left: `${clipPosition - 15}px`,
-                      top: '20px',
-                      width: '30px',
-                      height: '110px',
-                      zIndex: 20,
-                      pointerEvents: isDraggingFromLibrary ? 'none' : 'auto',
-                    }}
-                    onDragOver={(e) => {
-                      if (isReordering) {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        e.dataTransfer.dropEffect = 'move';
-                        setDragOverIndex(index);
-                        e.dataTransfer.setData('application/timeline-hover-index', String(index));
-                      }
-                    }}
-                  >
-                    {(isDraggingFromLibrary && libraryInsertIndex === index) && (
-                      <div className="timeline-drop-indicator" />
-                    )}
-                  </div>
-                )}
-                
-                {/* The clip card */}
+              {/* Drop zone before first clip (for library drag) */}
+              {isDraggingFromLibrary && libraryInsertIndex === 0 && (
                 <div
                   style={{
                     position: 'absolute',
-                    left: `${clipPosition}px`,
+                    left: '0px',
                     top: '20px',
-                    pointerEvents: 'auto', // Ensure wrapper doesn't block interactions
-                    zIndex: shouldRaiseZIndex ? 100 : 1, // Raise when trimming/hovered to prevent blocking
-                  }}
-                  onDragOver={(e) => {
-                    if (isReordering) {
-                      handleReorderDragOver(e, index);
-                    }
+                    width: '30px',
+                    height: '110px',
+                    zIndex: 20,
+                    pointerEvents: 'none',
                   }}
                 >
-                  {dragOverIndex === index && isReordering && draggedClipIndex !== index && (
-                    <div className="timeline-drop-indicator" />
-                  )}
-                  <TimelineClipCard
-                    clip={clip}
-                    libraryClip={libraryClip}
-                    zoom={timelineZoom}
-                    isSelected={selectedClipId === clip.id}
-                    onClick={() => onSelectClip(clip.id)}
-                    onDragStart={handleClipDragStart}
-                    onDelete={() => onDeleteClip(clip.id)}
-                    clipIndex={index}
-                    onTrimStart={handleTrimStart}
-                    onEdgeHoverChange={handleEdgeHoverChange}
-                    hoveredEdge={hoveredEdge?.clipId === clip.id ? hoveredEdge.edge : null}
-                    isTrimming={trimDrag.dragging?.clipId === clip.id}
-                    draggedInPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.draggedInPoint : null}
-                    draggedOutPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.draggedOutPoint : null}
-                    fixedInPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.fixedInPoint : null}
-                    fixedOutPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.fixedOutPoint : null}
-                    leftHandleAtMinimum={trimDrag.dragging?.clipId === clip.id && trimDrag.dragging?.edge === 'left' && trimDrag.isAtMinimum}
-                    rightHandleAtMinimum={trimDrag.dragging?.clipId === clip.id && trimDrag.dragging?.edge === 'right' && trimDrag.isAtMinimum}
-                  />
+                  <div className="timeline-drop-indicator" />
                 </div>
+              )}
 
-                {/* Drop zone after the last clip (for reordering or library drag) */}
-                {index === sortedTimeline.length - 1 && (
-                  <>
-                    {/* Reordering drop zone */}
-                    {isReordering && draggedClipIndex !== null && (
+              {/* Clip cards */}
+              {sortedTimeline.map((clip, index) => {
+                const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
+                if (!libraryClip) return null;
+
+                // Check if this clip is being trimmed and calculate adjusted position
+                const isThisClipTrimming = trimDrag.dragging?.clipId === clip.id;
+                const isLeftHandleDragging = isThisClipTrimming && trimDrag.dragging?.edge === 'left';
+                // Check if this clip's trim handle is hovered
+                const isThisClipHovered = hoveredEdge?.clipId === clip.id;
+                // Raise z-index if trimming or hovered to prevent other clips from blocking trim handles
+                const shouldRaiseZIndex = isThisClipTrimming || isThisClipHovered;
+                
+                // Calculate base clip position (from cumulative widths of previous clips)
+                let clipPosition = calculateClipPosition(index, sortedTimeline, library, timelineZoom);
+                
+                // Calculate clip width with current (or dragged) trim values
+                let displayTrimStart = clip.trimStart;
+                let displayTrimEnd = clip.trimEnd;
+                
+                if (isThisClipTrimming) {
+                  displayTrimStart = trimDrag.draggedInPoint ?? trimDrag.fixedInPoint ?? clip.trimStart;
+                  displayTrimEnd = trimDrag.draggedOutPoint ?? trimDrag.fixedOutPoint ?? clip.trimEnd;
+                }
+                
+                // Calculate width with displayed trim values
+                const displayClip = { ...clip, trimStart: displayTrimStart, trimEnd: displayTrimEnd };
+                const clipWidth = applyClipWidthConstraints(calculateClipWidth(displayClip, libraryClip, timelineZoom));
+                
+                // If dragging left handle, adjust position to keep right edge fixed
+                // Right edge position = originalPosition + originalWidth
+                // To keep right edge fixed: newPosition = rightEdgePosition - newWidth
+                if (isLeftHandleDragging && trimDrag.dragging && trimDrag.dragging.initialClipWidth > 0) {
+                  const originalWidth = trimDrag.dragging.initialClipWidth;
+                  const rightEdgePosition = trimDrag.dragging.initialClipStartX + originalWidth;
+                  clipPosition = rightEdgePosition - clipWidth;
+                }
+
+                return (
+                  <React.Fragment key={clip.id}>
+                    {/* Drop zone before this clip (for reordering or library drag) */}
+                    {((isReordering && draggedClipIndex !== null && draggedClipIndex !== index) ||
+                      (isDraggingFromLibrary && libraryInsertIndex === index)) && (
                       <div
                         style={{
                           position: 'absolute',
-                          left: `${clipPosition + clipWidth - 15}px`,
+                          left: `${clipPosition - 15}px`,
                           top: '20px',
                           width: '30px',
                           height: '110px',
                           zIndex: 20,
+                          pointerEvents: isDraggingFromLibrary ? 'none' : 'auto',
                         }}
                         onDragOver={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          e.dataTransfer.dropEffect = 'move';
-                          setDragOverIndex(sortedTimeline.length);
-                          e.dataTransfer.setData('application/timeline-hover-index', String(sortedTimeline.length));
-                        }}
-                      />
-                    )}
-                    {/* Library drag drop zone (at end) */}
-                    {isDraggingFromLibrary && libraryInsertIndex === sortedTimeline.length && (
-                      <div
-                        style={{
-                          position: 'absolute',
-                          left: `${clipPosition + clipWidth + 5}px`,
-                          top: '20px',
-                          width: '30px',
-                          height: '110px',
-                          zIndex: 20,
-                          pointerEvents: 'none',
+                          if (isReordering) {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            e.dataTransfer.dropEffect = 'move';
+                            setDragOverIndex(index);
+                            e.dataTransfer.setData('application/timeline-hover-index', String(index));
+                          }
                         }}
                       >
-                        <div className="timeline-drop-indicator" />
+                        {(isDraggingFromLibrary && libraryInsertIndex === index) && (
+                          <div className="timeline-drop-indicator" />
+                        )}
                       </div>
                     )}
-                  </>
-                )}
-              </React.Fragment>
-            );
-          })}
+                    
+                    {/* The clip card */}
+                    <div
+                      style={{
+                        position: 'absolute',
+                        left: `${clipPosition}px`,
+                        top: '20px',
+                        pointerEvents: 'auto', // Ensure wrapper doesn't block interactions
+                        zIndex: shouldRaiseZIndex ? 100 : 1, // Raise when trimming/hovered to prevent blocking
+                      }}
+                      onDragOver={(e) => {
+                        if (isReordering) {
+                          handleReorderDragOver(e, index);
+                        }
+                      }}
+                    >
+                      {dragOverIndex === index && isReordering && draggedClipIndex !== index && (
+                        <div className="timeline-drop-indicator" />
+                      )}
+                      <TimelineClipCard
+                        clip={clip}
+                        libraryClip={libraryClip}
+                        zoom={timelineZoom}
+                        isSelected={selectedClipId === clip.id}
+                        onClick={() => onSelectClip(clip.id)}
+                        onDragStart={handleClipDragStart}
+                        onDelete={() => onDeleteClip(clip.id)}
+                        clipIndex={index}
+                        onTrimStart={handleTrimStart}
+                        onEdgeHoverChange={handleEdgeHoverChange}
+                        hoveredEdge={hoveredEdge?.clipId === clip.id ? hoveredEdge.edge : null}
+                        isTrimming={trimDrag.dragging?.clipId === clip.id}
+                        draggedInPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.draggedInPoint : null}
+                        draggedOutPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.draggedOutPoint : null}
+                        fixedInPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.fixedInPoint : null}
+                        fixedOutPoint={trimDrag.dragging?.clipId === clip.id ? trimDrag.fixedOutPoint : null}
+                        leftHandleAtMinimum={trimDrag.dragging?.clipId === clip.id && trimDrag.dragging?.edge === 'left' && trimDrag.isAtMinimum}
+                        rightHandleAtMinimum={trimDrag.dragging?.clipId === clip.id && trimDrag.dragging?.edge === 'right' && trimDrag.isAtMinimum}
+                      />
+                    </div>
 
-          {/* Drop zone at end when timeline is empty or for library drag at end */}
-          {timeline.length === 0 && isDraggingFromLibrary && (
-            <div
-              style={{
-                position: 'absolute',
-                left: '0px',
-                top: '20px',
-                width: '30px',
-                height: '110px',
-                zIndex: 20,
-                pointerEvents: 'none',
-              }}
-            >
-              <div className="timeline-drop-indicator" />
-            </div>
-          )}
+                    {/* Drop zone after the last clip (for reordering or library drag) */}
+                    {index === sortedTimeline.length - 1 && (
+                      <>
+                        {/* Reordering drop zone */}
+                        {isReordering && draggedClipIndex !== null && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: `${clipPosition + clipWidth - 15}px`,
+                              top: '20px',
+                              width: '30px',
+                              height: '110px',
+                              zIndex: 20,
+                            }}
+                            onDragOver={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              e.dataTransfer.dropEffect = 'move';
+                              setDragOverIndex(sortedTimeline.length);
+                              e.dataTransfer.setData('application/timeline-hover-index', String(sortedTimeline.length));
+                            }}
+                          />
+                        )}
+                        {/* Library drag drop zone (at end) */}
+                        {isDraggingFromLibrary && libraryInsertIndex === sortedTimeline.length && (
+                          <div
+                            style={{
+                              position: 'absolute',
+                              left: `${clipPosition + clipWidth + 5}px`,
+                              top: '20px',
+                              width: '30px',
+                              height: '110px',
+                              zIndex: 20,
+                              pointerEvents: 'none',
+                            }}
+                          >
+                            <div className="timeline-drop-indicator" />
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </React.Fragment>
+                );
+              })}
 
-          {/* Empty state */}
-          {timeline.length === 0 && (
-            <div className="timeline-empty-state">
-              <p>Drag video files here or click to import</p>
+              {/* Drop zone at end when timeline is empty or for library drag at end */}
+              {timeline.length === 0 && isDraggingFromLibrary && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    left: '0px',
+                    top: '20px',
+                    width: '30px',
+                    height: '110px',
+                    zIndex: 20,
+                    pointerEvents: 'none',
+                  }}
+                >
+                  <div className="timeline-drop-indicator" />
+                </div>
+              )}
+
+              {/* Empty state */}
+              {timeline.length === 0 && (
+                <div className="timeline-empty-state">
+                  <p>Drag video files here or click to import</p>
+                </div>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </div>
 
@@ -891,7 +947,7 @@ const Timeline: React.FC<TimelineProps> = ({
           onZoomChange={onZoomChange}
           timeline={timeline}
           library={library}
-          timelineContainerRef={timelineContainerRef}
+          timelineContainerRef={timelineContainerRef as React.RefObject<HTMLDivElement>}
         />
       </div>
 
