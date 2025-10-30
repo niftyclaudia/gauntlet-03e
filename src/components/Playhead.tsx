@@ -1,7 +1,7 @@
 /**
  * Playhead Component
  * 
- * Red vertical line showing current time position on timeline
+ * White vertical line showing current time position on timeline
  */
 
 import React from 'react';
@@ -93,24 +93,60 @@ const Playhead: React.FC<PlayheadProps> = ({
       style={{
         position: 'absolute',
         left: `${xPosition}px`,
-        top: 0,
+        top: '-46px', // Extend up into the ruler area (40px ruler + 6px gap)
         bottom: 0,
-        width: onDrag ? '8px' : '2px',
-        marginLeft: onDrag ? '-4px' : '-1px',
-        backgroundColor: '#ff0000',
+        width: '12px', // Wider hit area for easier grabbing
+        marginLeft: '-6px', // Center the hit area
         cursor: onDrag ? 'ew-resize' : 'default',
         pointerEvents: onDrag ? 'auto' : 'none',
-        zIndex: 100, // Higher z-index to be above clips
+        zIndex: 1000, // Always on top of timeline elements
         userSelect: 'none', // Prevent text selection during drag
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        // Transparent background for hit area
+        background: 'transparent',
       }}
       onMouseDown={onDrag ? handleMouseDown : undefined}
       onClick={(e) => {
         // Prevent timeline click from interfering
         e.stopPropagation();
       }}
-    />
+    >
+      {/* Triangle handle at top - now in ruler area (white playhead) */}
+      <div
+        style={{
+          width: '14px',
+          height: '12px',
+          background: '#ffffff',
+          clipPath: 'polygon(50% 100%, 0% 0%, 100% 0%)',
+          boxShadow: '0 0 4px rgba(255, 255, 255, 0.4)',
+          borderBottom: '1px solid rgba(255, 255, 255, 0.3)',
+          zIndex: 1001, // Above the playhead container
+        }}
+      />
+      
+      {/* Line through ruler area */}
+      <div
+        style={{
+          width: '2px',
+          height: '40px', // Height of ruler area
+          background: '#ffffff',
+          boxShadow: '0 0 3px rgba(255, 255, 255, 0.4)',
+        }}
+      />
+      
+      {/* Thin visual line down the timeline */}
+      <div
+        style={{
+          width: '2px',
+          flex: 1,
+          background: '#ffffff',
+          boxShadow: '0 0 3px rgba(255, 255, 255, 0.4)',
+        }}
+      />
+    </div>
   );
 };
 
 export default Playhead;
-
