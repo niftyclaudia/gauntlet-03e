@@ -37,8 +37,8 @@
 | S12 | Webcam Recording | 5 | ✅ COMPLETE | Complex | MVP Complete |
 | S13 | Picture-in-Picture Recording | 5 | ✅ COMPLETE | Complex | S9, S10 |
 | S14 | Advanced Timeline (Multiple Tracks) | 5 | ✅ REQUIRED | Complex | MVP Complete |
-| S15 | Split & Advanced Trim | 5 | ✅ REQUIRED | Medium | MVP Timeline |
-| S16 | Advanced Export Options | 6 | ✅ REQUIRED | Medium | MVP Export |
+| S15 | Split & Advanced Trim | 5 | ✅ COMPLETE | Medium | MVP Timeline |
+| S16 | Advanced Export Options | 6 | ✅ COMPLETE | Medium | MVP Export |
 | S17 | Audio Capture & Controls | 6 | ✅ REQUIRED | Medium | S9, S10 |
 | S19 | Audio Effects (Fade, Normalize, Pan) | 6 | ⚡ STRETCH | Medium | S15 |
 | S20 | Video Filters & Effects | 6 | ⚡ STRETCH | Complex | MVP Timeline |
@@ -257,19 +257,19 @@
 
 **Acceptance Criteria**:
 
-- [ ] **AC-1**: Export dialog displays resolution presets: 720p, 1080p, 4K (if hardware capable)
-- [ ] **AC-2**: Custom resolution input available for non-standard dimensions
-- [ ] **AC-3**: Bitrate presets: Low (2Mbps), Medium (5Mbps), High (10Mbps), Custom
-- [ ] **AC-4**: Frame rate options: 24fps, 30fps, 60fps
-- [ ] **AC-5**: Platform presets available: YouTube, Instagram, TikTok, Twitter, Custom
-- [ ] **AC-6**: Each preset auto-fills resolution, bitrate, and format
-- [ ] **AC-7**: YouTube preset: 1080p@30fps, 12Mbps, H.264, MP4
-- [ ] **AC-8**: Instagram preset: 1080x1350 (vertical), 5Mbps
-- [ ] **AC-9**: TikTok preset: 1080x1920 (vertical), 5Mbps
-- [ ] **AC-10**: User can create/save custom export presets
-- [ ] **AC-11**: Unsupported resolution shows warning (e.g., 4K requested but source is 720p)
-- [ ] **AC-12**: Export file organized to `exports/YYYY-MM-DD/` folder structure
-- [ ] **AC-13**: Batch export available (export multiple timelines with different presets)
+- [x] **AC-1**: Export dialog displays resolution presets: 720p, 1080p, 4K (if hardware capable)
+- [x] **AC-2**: Custom resolution input available for non-standard dimensions
+- [x] **AC-3**: Bitrate presets: Low (2Mbps), Medium (5Mbps), High (10Mbps), Custom
+- [x] **AC-4**: Frame rate options: 24fps, 30fps, 60fps
+- [x] **AC-5**: Platform presets available: YouTube, Instagram, TikTok, Twitter, Custom
+- [x] **AC-6**: Each preset auto-fills resolution, bitrate, and format
+- [x] **AC-7**: YouTube preset: 1080p@30fps, 12Mbps, H.264, MP4
+- [x] **AC-8**: Instagram preset: 1080x1350 (vertical), 5Mbps
+- [x] **AC-9**: TikTok preset: 1080x1920 (vertical), 5Mbps
+- [x] **AC-10**: User can create/save custom export presets
+- [x] **AC-11**: Unsupported resolution shows warning (e.g., 4K requested but source is 720p)
+- [x] **AC-12**: Export file organized to `exports/YYYY-MM-DD/` folder structure
+- [x] **AC-13**: Batch export available (export multiple timelines with different presets)
 
 **Definition of Done**:
 - All preset exports produce files at correct resolution/bitrate (verified with ffprobe)
