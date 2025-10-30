@@ -41,7 +41,7 @@ function getRecordingsDirectory(): string {
  */
 export async function getAvailableScreens(): Promise<ScreenInfo[]> {
   try {
-    console.log(`[ScreenRecording] Requesting screen sources...`);
+    console.log(`[ScreenRecording] Requesting screen and window sources...`);
     
     // Get actual screen displays to get real resolutions
     const displays = electronScreen.getAllDisplays();
@@ -50,13 +50,13 @@ export async function getAvailableScreens(): Promise<ScreenInfo[]> {
       console.log(`[ScreenRecording] Display ${idx + 1}: ${display.bounds.width}x${display.bounds.height} at (${display.bounds.x}, ${display.bounds.y})`);
     });
     
-    // Get screens only (exclude windows) with larger thumbnail size for better quality
+    // Get both screens and windows with larger thumbnail size for better quality
     const sources = await desktopCapturer.getSources({
-      types: ['screen'],
+      types: ['screen', 'window'],
       thumbnailSize: { width: 320, height: 240 }
     });
 
-    console.log(`[ScreenRecording] Found ${sources.length} screen source(s)`);
+    console.log(`[ScreenRecording] Found ${sources.length} source(s) (screens + windows)`);
 
     // Process screens with enhanced thumbnail validation
     const screens: ScreenInfo[] = [];
@@ -96,7 +96,7 @@ export async function getAvailableScreens(): Promise<ScreenInfo[]> {
       }
       
       // Enhanced thumbnail generation with multiple strategies
-      let thumbnailDataUrl: string = '';
+      let thumbnailDataUrl = '';
       
       // Strategy 1: Try immediate conversion
       try {
@@ -157,11 +157,11 @@ export async function getAvailableScreens(): Promise<ScreenInfo[]> {
       
       // Strategy 3: If still no thumbnail, try one more time with fresh source
       if (!thumbnailDataUrl) {
-        console.log(`[ScreenRecording] Trying fresh source for screen ${index + 1}...`);
+        console.log(`[ScreenRecording] Trying fresh source for source ${index + 1}...`);
         try {
-          // Get a fresh source for this screen
+          // Get a fresh source for this screen/window
           const freshSources = await desktopCapturer.getSources({
-            types: ['screen'],
+            types: ['screen', 'window'],
             thumbnailSize: { width: 320, height: 240 }
           });
           
@@ -170,11 +170,11 @@ export async function getAvailableScreens(): Promise<ScreenInfo[]> {
             const freshDataUrl = freshSource.thumbnail.toDataURL('image/png');
             if (freshDataUrl.startsWith('data:image/png') && freshDataUrl.length > 500) {
               thumbnailDataUrl = freshDataUrl;
-              console.log(`[ScreenRecording] Fresh source thumbnail successful for screen ${index + 1}`);
+              console.log(`[ScreenRecording] Fresh source thumbnail successful for source ${index + 1}`);
             }
           }
         } catch (freshError) {
-          console.warn(`[ScreenRecording] Fresh source attempt failed for screen ${index + 1}:`, freshError);
+          console.warn(`[ScreenRecording] Fresh source attempt failed for source ${index + 1}:`, freshError);
         }
       }
       
@@ -189,17 +189,23 @@ export async function getAvailableScreens(): Promise<ScreenInfo[]> {
       
       console.log(`[ScreenRecording] Final resolution string for screen ${index + 1}: "${resolutionStr}"`);
       
+      // Determine if this is a screen or window by checking the source name pattern
+      const isScreen = source.name.toLowerCase().includes('entire screen') || 
+                       source.name.toLowerCase().includes('screen') ||
+                       (!source.name.includes(':') && source.name.match(/^\s*(screen|display)\s+\d+/i));
+      
       screens.push({
         id: source.id,
-        name: source.name || `Screen ${index + 1}`,
+        name: source.name || (isScreen ? `Screen ${index + 1}` : `Window ${index + 1}`),
         resolution: resolutionStr,
-        thumbnail: thumbnailDataUrl
+        thumbnail: thumbnailDataUrl,
+        type: isScreen ? 'screen' : 'window'
       });
       
-      console.log(`[ScreenRecording] Added screen ${index + 1} with resolution: "${screens[screens.length - 1].resolution}"`);
+      console.log(`[ScreenRecording] Added ${isScreen ? 'screen' : 'window'} ${index + 1} with resolution: "${screens[screens.length - 1].resolution}"`);
     }
 
-    console.log(`[ScreenRecording] Processed ${screens.length} screen(s) with thumbnails`);
+    console.log(`[ScreenRecording] Processed ${screens.length} source(s) with thumbnails`);
     return screens;
   } catch (error) {
     console.error('[ScreenRecording] Failed to get available screens:', error);
