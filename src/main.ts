@@ -4,6 +4,7 @@ import started from 'electron-squirrel-startup';
 import { registerIpcHandlers } from './main/ipcHandlers';
 import { registerRecordingHandlers } from './main/ipc-handlers/recordingHandlers';
 import { registerWebcamHandlers } from './main/ipc-handlers/webcam';
+import { registerPiPHandlers } from './main/ipc-handlers/pip';
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -58,6 +59,7 @@ app.on('ready', () => {
     registerIpcHandlers();
     registerRecordingHandlers();
     registerWebcamHandlers();
+    registerPiPHandlers();
     console.log('[Main] IPC handlers registered successfully');
   } catch (error) {
     console.error('[Main] Failed to register IPC handlers:', error);

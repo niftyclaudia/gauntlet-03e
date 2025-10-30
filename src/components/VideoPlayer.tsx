@@ -906,7 +906,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             // Playback will continue automatically (handled in canplay event)
             return; // Skip rest of time update handling
           } else {
-            // Sequence ended - keep showing last clip and sync playhead to final position
+            // Sequence ended - but only handle it once
+            if (isEndingSequenceRef.current) {
+              // Already handled, just return to prevent loop
+              return;
+            }
+            
+            // Keep showing last clip and sync playhead to final position
             const totalSequenceDuration = calculateSequenceDuration(sequence);
             
             // Set flag to prevent playhead change from triggering unwanted clip loads

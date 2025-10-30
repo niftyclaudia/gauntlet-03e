@@ -16,6 +16,8 @@ export interface ScreenInfo {
   resolution: string;
   /** Base64 data URL of screen thumbnail */
   thumbnail: string;
+  /** Source type - either 'screen' or 'window' */
+  type: 'screen' | 'window';
 }
 
 /**

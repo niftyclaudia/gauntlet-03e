@@ -189,8 +189,11 @@ const RecordScreenDialog: React.FC<RecordScreenDialogProps> = ({
                   <div className="screen-info">
                     <div className="screen-name">{screen.name}</div>
                     <div className="screen-resolution">{screen.resolution}</div>
-                    <div className="screen-debug" style={{ fontSize: '10px', color: '#666', marginTop: '4px' }}>
-                      ID: {screen.id.slice(0, 8)}... | Thumb: {screen.thumbnail ? 'Yes' : 'No'}
+                    <div className="screen-debug" style={{ fontSize: '10px', color: '#666', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span>ID: {screen.id.slice(0, 8)}... | Thumb: {screen.thumbnail ? 'Yes' : 'No'}</span>
+                      <span className={`source-type-badge source-type-${screen.type}`}>
+                        {screen.type.toUpperCase()}
+                      </span>
                     </div>
                   </div>
                 </label>

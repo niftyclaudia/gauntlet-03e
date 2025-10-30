@@ -16,6 +16,7 @@ import RecordingIndicator from './components/RecordingIndicator';
 import RecordingPermissionDialog from './components/RecordingPermissionDialog';
 import WebcamRecordingModal from './components/WebcamRecordingModal';
 import RecordingTypeModal from './components/RecordingTypeModal';
+import PiPRecordingModal from './components/PiPRecordingModal';
 import { VideoClip, TimelineClip } from './types/video';
 import { addClipToTimeline, reorderTimelineClip, removeClipFromTimeline } from './utils/timelineOperations';
 import { useAutoSave } from './hooks/useAutoSave';
@@ -59,6 +60,9 @@ const App: React.FC = () => {
   
   // Webcam recording state
   const [showWebcamModal, setShowWebcamModal] = useState<boolean>(false);
+  
+  // PiP recording state
+  const [showPiPModal, setShowPiPModal] = useState<boolean>(false);
   
   // Unified recording modal state
   const [showRecordingTypeModal, setShowRecordingTypeModal] = useState<boolean>(false);
@@ -300,6 +304,11 @@ const App: React.FC = () => {
   const handleSelectWebcamRecording = useCallback(() => {
     setShowRecordingTypeModal(false);
     setShowWebcamModal(true);
+  }, []);
+
+  const handleSelectPiPRecording = useCallback(() => {
+    setShowRecordingTypeModal(false);
+    setShowPiPModal(true);
   }, []);
 
   // Legacy handlers (kept for compatibility)
@@ -638,11 +647,17 @@ const App: React.FC = () => {
         onClose={() => setShowWebcamModal(false)}
         onRecordingComplete={handleWebcamRecordingComplete}
       />
+      <PiPRecordingModal
+        isOpen={showPiPModal}
+        onClose={() => setShowPiPModal(false)}
+        onRecordingComplete={handleWebcamRecordingComplete}
+      />
       <RecordingTypeModal
         isOpen={showRecordingTypeModal}
         onClose={() => setShowRecordingTypeModal(false)}
         onSelectScreenRecording={handleSelectScreenRecording}
         onSelectWebcamRecording={handleSelectWebcamRecording}
+        onSelectPiPRecording={handleSelectPiPRecording}
       />
       
       {isProcessingRecording && (

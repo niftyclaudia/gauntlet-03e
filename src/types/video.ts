@@ -237,3 +237,97 @@ export interface EncodedRecording {
   thumbnailPath?: string;
 }
 
+/**
+ * Picture-in-Picture recording settings
+ */
+export interface PiPRecordingSettings {
+  /** Selected screen/window ID from desktopCapturer */
+  screenId: string;
+  /** Webcam position: Top-Left, Top-Right, Bottom-Left, Bottom-Right */
+  webcamPosition: 'TL' | 'TR' | 'BL' | 'BR';
+  /** Webcam size: 20%, 30%, 40% of screen width */
+  webcamSize: 'small' | 'medium' | 'large';
+  /** Webcam shape: rectangle or circle */
+  webcamShape: 'rectangle' | 'circle';
+  /** Audio mode: mix both, screen only, or webcam only */
+  audioMode: 'both' | 'screen-only' | 'webcam-only';
+  /** Selected camera device ID */
+  selectedCameraId?: string;
+  /** Selected microphone device ID */
+  selectedMicrophoneId?: string;
+}
+
+/**
+ * PiP recording session state
+ */
+export interface PiPRecordingSession {
+  /** Unique recording session ID */
+  id: string;
+  /** Recording start timestamp (ms) */
+  startTime: number;
+  /** Temp file path for screen recording */
+  screenFilePath: string;
+  /** Temp file path for webcam recording */
+  webcamFilePath: string;
+  /** Recording settings */
+  settings: PiPRecordingSettings;
+  /** Current session status */
+  status: 'recording' | 'stopping' | 'compositing' | 'done' | 'error';
+  /** Error message if status is error */
+  errorMessage?: string;
+}
+
+/**
+ * PiP recorded clip (extends VideoClip)
+ */
+export interface PiPRecordedClip extends VideoClip {
+  /** Timestamp when recorded */
+  recordedAt: number;
+  /** Flag indicating this is a PiP recording */
+  isPiPRecording: boolean;
+}
+
+/**
+ * Media device information
+ */
+export interface MediaDevice {
+  /** Unique device identifier */
+  deviceId: string;
+  /** Human-readable device name */
+  label: string;
+  /** Device type: audio input or video input */
+  kind: 'audioinput' | 'videoinput';
+  /** Whether this is the system default device */
+  isDefault: boolean;
+}
+
+/**
+ * Permission status for UI indicators
+ */
+export interface PermissionStatus {
+  /** Whether permission is granted */
+  granted: boolean;
+  /** Whether permission is explicitly denied */
+  denied: boolean;
+  /** Reason if not available (e.g., "Camera in use") */
+  reason?: string;
+}
+
+/**
+ * PiP session state for persistence
+ */
+export interface PiPSessionState {
+  /** Last used webcam position */
+  lastPosition: 'TL' | 'TR' | 'BL' | 'BR';
+  /** Last used webcam size */
+  lastSize: 'small' | 'medium' | 'large';
+  /** Last used webcam shape */
+  lastShape: 'rectangle' | 'circle';
+  /** Last used audio mode */
+  lastAudioMode: 'both' | 'screen-only' | 'webcam-only';
+  /** Last used camera device ID */
+  lastCameraId?: string;
+  /** Last used microphone device ID */
+  lastMicrophoneId?: string;
+}
+

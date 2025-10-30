@@ -380,4 +380,48 @@ contextBridge.exposeInMainWorld('electron', {
       return ipcRenderer.invoke('check-microphone-permission');
     },
   },
+
+  /**
+   * PiP recording API
+   */
+  pip: {
+    /**
+     * Start PiP recording session
+     * @param settings - PiP recording settings
+     * @returns Promise with session ID
+     */
+    startRecording: (settings: {
+      screenId: string;
+      position: 'TL' | 'TR' | 'BL' | 'BR';
+      size: 'small' | 'medium' | 'large';
+      shape: 'rectangle' | 'circle';
+      audioMode: 'both' | 'screen-only' | 'webcam-only';
+    }): Promise<{ success: boolean; sessionId?: string; error?: string }> => {
+      return ipcRenderer.invoke('pip:start-recording', settings);
+    },
+
+    /**
+     * Stop PiP recording and compose video
+     * @param sessionId - Recording session ID
+     * @param screenData - Screen recording data as base64 string
+     * @param webcamData - Webcam recording data as base64 string
+     * @returns Promise with output file path
+     */
+    stopRecording: (data: {
+      sessionId: string;
+      screenData: string; // base64 encoded string
+      webcamData: string; // base64 encoded string
+    }): Promise<{ success: boolean; filePath?: string; error?: string }> => {
+      return ipcRenderer.invoke('pip:stop-recording', data);
+    },
+
+    /**
+     * Get PiP session information
+     * @param sessionId - Recording session ID
+     * @returns Promise with session info
+     */
+    getSession: (sessionId: string): Promise<{ success: boolean; session?: any; error?: string }> => {
+      return ipcRenderer.invoke('pip:get-session', { sessionId });
+    },
+  },
 });
