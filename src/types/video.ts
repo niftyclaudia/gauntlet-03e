@@ -331,3 +331,33 @@ export interface PiPSessionState {
   lastMicrophoneId?: string;
 }
 
+/**
+ * Export preset configuration for platform-optimized exports
+ */
+export interface ExportPreset {
+  /** Unique preset identifier */
+  id: string;
+  /** Display name for UI */
+  name: string;
+  /** Target resolution */
+  resolution: { width: number; height: number };
+  /** Video bitrate in Mbps */
+  bitrate: number;
+  /** Frame rate in fps */
+  framerate: number;
+}
+
+/**
+ * Advanced export settings with preset and custom options
+ */
+export interface AdvancedExportSettings {
+  /** Selected preset (YouTube, Instagram, etc.) */
+  preset: ExportPreset;
+  /** Custom resolution override (null to use preset) */
+  customResolution: { width: number; height: number } | null;
+  /** Custom bitrate override in Mbps (null to use preset) */
+  customBitrate: number | null;
+  /** Custom framerate override in fps (null to use preset) */
+  customFramerate: number | null;
+}
+
