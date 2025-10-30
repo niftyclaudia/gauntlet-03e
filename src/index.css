@@ -23,6 +23,17 @@
   }
 }
 
+@keyframes cutLinePulse {
+  0%, 100% {
+    opacity: 0.8;
+    transform: scaleX(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scaleX(1.2);
+  }
+}
+
 html,
 body {
   width: 100%;
@@ -611,6 +622,98 @@ body {
   background-color: #333333;
   color: #666666;
   cursor: not-allowed;
+}
+
+/* Timeline Controls */
+.timeline-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Split Button */
+.timeline-split-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background-color: #333333;
+  color: #ffffff;
+  border: 1px solid #555555;
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.timeline-split-button.enabled {
+  background-color: transparent;
+  border-color: #ff6b6b;
+  color: white;
+}
+
+.timeline-split-button.enabled:hover {
+  background-color: #ff6b6b;
+  color: white;
+}
+
+.timeline-split-button.clicked {
+  background-color: #ff6b6b;
+  color: white;
+  transform: scale(0.95);
+}
+
+.timeline-split-button.success {
+  background-color: #4caf50;
+  border-color: #4caf50;
+  color: white;
+  animation: successPulse 0.6s ease-out;
+}
+
+@keyframes successPulse {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.timeline-split-button.disabled {
+  background-color: #333333;
+  color: #666666;
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.split-button-icon {
+  font-size: 14px;
+}
+
+.split-button-text {
+  font-weight: 500;
+  font-size: 12px;
+}
+
+.split-button-indicator {
+  color: #4caf50;
+  font-size: 10px;
+  margin-left: 2px;
+  animation: pulse 1s infinite;
+}
+
+/* Cut Line */
+.cut-line {
+  position: absolute;
+  background: linear-gradient(to bottom, #ff6b6b, #ff5252);
+  box-shadow: 0 0 8px rgba(255, 107, 107, 0.6);
+  animation: cutLinePulse 1.5s infinite ease-in-out;
 }
 
 /* Time Ruler */

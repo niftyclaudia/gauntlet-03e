@@ -6,7 +6,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { validateTrimStart, validateTrimEnd } from '../utils/trimCalculations';
+import { validateTrimStart, validateTrimEnd, snapToGrid } from '../utils/trimCalculations';
 
 /** Minimum clip duration in seconds (must match trimCalculations.ts) */
 const MIN_CLIP_DURATION = 1.0;
@@ -49,6 +49,8 @@ export interface UseTrimDragReturn {
   isAtMinimum: boolean;
   /** Whether the current trim violates minimum duration constraint */
   isBelowMinimum: boolean;
+  /** Whether snap is currently active */
+  isSnapped: boolean;
   /** Start trim drag operation */
   handleTrimStart: (
     clipId: string,
@@ -67,7 +69,10 @@ export interface UseTrimDragReturn {
     clipDuration: number,
     mouseXScreen?: number,
     mouseYScreen?: number,
-    currentClipStartX?: number
+    currentClipStartX?: number,
+    snapEnabled?: boolean,
+    snapInterval?: '1sec' | '500ms' | 'frame',
+    framerate?: number
   ) => void;
   /** End trim drag operation */
   handleTrimEnd: () => void;
@@ -89,6 +94,7 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
   const [tooltipVisible, setTooltipVisible] = useState<boolean>(false);
   const [isAtMinimum, setIsAtMinimum] = useState<boolean>(false);
   const [isBelowMinimum, setIsBelowMinimum] = useState<boolean>(false);
+  const [isSnapped, setIsSnapped] = useState<boolean>(false);
 
   /**
    * Start trim drag operation
@@ -142,7 +148,10 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
     mouseX: number,
     clipDuration: number,
     mouseXScreen?: number,
-    mouseYScreen?: number
+    mouseYScreen?: number,
+    snapEnabled?: boolean,
+    snapInterval?: '1sec' | '500ms' | 'frame',
+    framerate?: number
   ) => {
     if (!dragging) return;
 
@@ -158,7 +167,13 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
 
     if (dragging.edge === 'left') {
       // Dragging left handle: update trimStart
-      const newInPoint = dragging.initialInPoint + timeDelta;
+      let newInPoint = dragging.initialInPoint + timeDelta;
+      
+      // Always apply smart snapping
+      if (framerate) {
+        newInPoint = snapToGrid(newInPoint, '1sec', framerate);
+      }
+      
       const validatedInPoint = validateTrimStart(
         newInPoint,
         dragging.initialOutPoint, // Use initial outPoint (not dragged)
@@ -172,7 +187,13 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
       currentOutPoint = dragging.initialOutPoint;
     } else {
       // Dragging right handle: update trimEnd
-      const newOutPoint = dragging.initialOutPoint + timeDelta;
+      let newOutPoint = dragging.initialOutPoint + timeDelta;
+      
+      // Always apply smart snapping
+      if (framerate) {
+        newOutPoint = snapToGrid(newOutPoint, '1sec', framerate);
+      }
+      
       const validatedOutPoint = validateTrimEnd(
         dragging.initialInPoint, // Use initial inPoint (not dragged)
         newOutPoint,
@@ -193,6 +214,13 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
     
     setIsAtMinimum(isAtMin);
     setIsBelowMinimum(isBelowMin);
+    
+    // Check if snap is active (if the value changed from unsnapped)
+    const isSnappedNow = framerate && (
+      (dragging.edge === 'left' && Math.abs(validatedInPoint - (dragging.initialInPoint + timeDelta)) > 0.01) ||
+      (dragging.edge === 'right' && Math.abs(validatedOutPoint - (dragging.initialOutPoint + timeDelta)) > 0.01)
+    );
+    setIsSnapped(isSnappedNow);
 
     // Update tooltip position to follow mouse cursor
     if (mouseXScreen !== undefined && mouseYScreen !== undefined) {
@@ -212,6 +240,7 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
     setTooltipVisible(false);
     setIsAtMinimum(false);
     setIsBelowMinimum(false);
+    setIsSnapped(false);
   }, []);
 
   return {
@@ -224,6 +253,7 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
     tooltipVisible,
     isAtMinimum,
     isBelowMinimum,
+    isSnapped,
     handleTrimStart,
     handleTrimMove,
     handleTrimEnd,

@@ -7,6 +7,7 @@
 
 import React from 'react';
 import { formatDuration } from '../utils/formatDuration';
+import FrameCounter from './FrameCounter';
 
 interface TrimTooltipProps {
   /** Original duration before trim (seconds) */
@@ -23,6 +24,12 @@ interface TrimTooltipProps {
   isAtMinimum?: boolean;
   /** Whether the new duration violates minimum constraint */
   isBelowMinimum?: boolean;
+  /** Video framerate for frame counter (default 30fps) */
+  framerate?: number;
+  /** Current trim start time for frame display */
+  currentTrimStart?: number;
+  /** Current trim end time for frame display */
+  currentTrimEnd?: number;
 }
 
 const TrimTooltip: React.FC<TrimTooltipProps> = ({
@@ -33,6 +40,9 @@ const TrimTooltip: React.FC<TrimTooltipProps> = ({
   isExpanding,
   isAtMinimum = false,
   isBelowMinimum = false,
+  framerate = 30,
+  currentTrimStart,
+  currentTrimEnd,
 }) => {
   if (!visible) {
     return null;
@@ -78,6 +88,22 @@ const TrimTooltip: React.FC<TrimTooltipProps> = ({
         {showWarning && (
           <div className="trim-tooltip-warning-message">
             {isAtMinimum ? 'Minimum duration reached' : 'Duration too short - minimum 1.0s'}
+          </div>
+        )}
+        {(currentTrimStart !== undefined || currentTrimEnd !== undefined) && (
+          <div className="trim-tooltip-frames">
+            {currentTrimStart !== undefined && (
+              <div className="trim-tooltip-frame-info">
+                <span className="trim-tooltip-frame-label">In:</span>
+                <FrameCounter time={currentTrimStart} framerate={framerate} />
+              </div>
+            )}
+            {currentTrimEnd !== undefined && (
+              <div className="trim-tooltip-frame-info">
+                <span className="trim-tooltip-frame-label">Out:</span>
+                <FrameCounter time={currentTrimEnd} framerate={framerate} />
+              </div>
+            )}
           </div>
         )}
       </div>

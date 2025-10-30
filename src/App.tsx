@@ -18,7 +18,7 @@ import WebcamRecordingModal from './components/WebcamRecordingModal';
 import RecordingTypeModal from './components/RecordingTypeModal';
 import PiPRecordingModal from './components/PiPRecordingModal';
 import { VideoClip, TimelineClip } from './types/video';
-import { addClipToTimeline, reorderTimelineClip, removeClipFromTimeline } from './utils/timelineOperations';
+import { addClipToTimeline, reorderTimelineClip, removeClipFromTimeline, splitClipAtPlayhead } from './utils/timelineOperations';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useSessionRestore } from './hooks/useSessionRestore';
 import { serializeProjectState } from './utils/projectStateUtils';
@@ -45,6 +45,8 @@ const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isExporting] = useState<boolean>(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  
+  // Split state
 
   // Recording state
   const [showRecordDialog, setShowRecordDialog] = useState<boolean>(false);
@@ -188,6 +190,59 @@ const App: React.FC = () => {
         return clip;
       });
     });
+  };
+
+  /**
+   * Handle splitting a clip at the current playhead position
+   */
+  const handleSplitClip = () => {
+    const clipToSplit = getClipAtPlayhead();
+    if (!clipToSplit) {
+      console.warn('[App] Cannot split - no clip found at playhead position');
+      return;
+    }
+
+    setTimeline(prev => {
+      const newTimeline = splitClipAtPlayhead(clipToSplit.id, currentPlayheadPosition, prev, library);
+      if (newTimeline.length > prev.length) {
+        console.log(`[App] Split clip ${clipToSplit.id} at ${currentPlayheadPosition.toFixed(2)}s. Timeline now has ${newTimeline.length} clip(s).`);
+      }
+      return newTimeline;
+    });
+  };
+
+  /**
+   * Get the clip that the playhead is currently over (for splitting)
+   */
+  const getClipAtPlayhead = (): TimelineClip | null => {
+    let currentTime = 0;
+    
+    // Sort timeline by order to ensure correct calculation
+    const sortedTimeline = [...timeline].sort((a, b) => a.order - b.order);
+    
+    for (const clip of sortedTimeline) {
+      const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
+      if (!libraryClip) continue;
+      
+      const clipStartTime = currentTime;
+      const clipEndTime = currentTime + (clip.trimEnd - clip.trimStart);
+      
+      // Check if playhead is within this clip's timeline position
+      if (currentPlayheadPosition >= clipStartTime && currentPlayheadPosition <= clipEndTime) {
+        return clip;
+      }
+      
+      currentTime = clipEndTime;
+    }
+    
+    return null;
+  };
+
+  /**
+   * Check if playhead is over a clip (for split button enable/disable)
+   */
+  const isPlayheadOverClip = (): boolean => {
+    return getClipAtPlayhead() !== null;
   };
 
   /**
@@ -682,6 +737,8 @@ const App: React.FC = () => {
         onScrollChange={setTimelineScrollPosition}
         onPlayheadChange={setCurrentPlayheadPosition}
         onTrimUpdate={handleTrimUpdate}
+        onSplitClip={handleSplitClip}
+        isPlayheadOverClip={isPlayheadOverClip()}
       />
     </div>
   );

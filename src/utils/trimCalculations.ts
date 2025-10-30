@@ -132,3 +132,44 @@ export function getMaxTrimEnd(
   return Math.min(clipDuration, trimStart + MIN_CLIP_DURATION);
 }
 
+/**
+ * Smart snap time to grid intervals with automatic detection
+ * 
+ * CapCut-style approach: Always enabled, smart detection of:
+ * - 1-second intervals (primary)
+ * - Frame boundaries (secondary)
+ * 
+ * @param time - Time in seconds to snap
+ * @param interval - Snap interval type (ignored, always uses smart detection)
+ * @param framerate - Video framerate (default 30fps)
+ * @returns Snapped time value
+ */
+export function snapToGrid(
+  time: number,
+  interval: '1sec' | '500ms' | 'frame',
+  framerate = 30
+): number {
+  // Smart snapping: prioritize 1-second intervals, fall back to frame boundaries
+  
+  // First, try snapping to 1-second intervals
+  const oneSecondSnap = Math.round(time);
+  const oneSecondDistance = Math.abs(time - oneSecondSnap);
+  
+  // If we're very close to a 1-second mark (within 0.1 seconds), snap to it
+  if (oneSecondDistance < 0.1) {
+    return oneSecondSnap;
+  }
+  
+  // Otherwise, snap to frame boundaries
+  const frameSnap = Math.round(time * framerate) / framerate;
+  const frameDistance = Math.abs(time - frameSnap);
+  
+  // If we're close to a frame boundary (within 1/60th of a second), snap to it
+  if (frameDistance < 1/60) {
+    return frameSnap;
+  }
+  
+  // If neither is close enough, return original time (no snap)
+  return time;
+}
+
