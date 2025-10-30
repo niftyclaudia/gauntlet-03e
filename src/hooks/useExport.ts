@@ -5,7 +5,7 @@
  */
 
 import { useState, useCallback } from 'react';
-import { TimelineClip, VideoClip, SavedProjectState } from '../types/video';
+import { TimelineClip, VideoClip, SavedProjectState, AdvancedExportSettings } from '../types/video';
 
 export interface UseExportReturn {
   /** Whether export is in progress */
@@ -17,7 +17,7 @@ export interface UseExportReturn {
   /** Export output file path (set when export completes) */
   outputPath: string | null;
   /** Start export process */
-  startExport: (clips: TimelineClip[], libraryClips: VideoClip[]) => Promise<void>;
+  startExport: (clips: TimelineClip[], libraryClips: VideoClip[], projectState?: SavedProjectState, advancedSettings?: AdvancedExportSettings) => Promise<void>;
   /** Reset export state */
   reset: () => void;
 }
@@ -53,7 +53,8 @@ export function useExport(): UseExportReturn {
   const startExport = useCallback(async (
     clips: TimelineClip[],
     libraryClips: VideoClip[],
-    projectState?: SavedProjectState
+    projectState?: SavedProjectState,
+    advancedSettings?: AdvancedExportSettings
   ): Promise<void> => {
     try {
       // Validate inputs
@@ -70,9 +71,10 @@ export function useExport(): UseExportReturn {
       setError(null);
       setOutputPath(null);
 
-      // Open save dialog
+      // Open save dialog with preset ID if provided
       const defaultFilename = generateDefaultFilename();
-      const outputPath = await window.electron.showSaveDialog(defaultFilename);
+      const presetId = advancedSettings?.preset.id;
+      const outputPath = await window.electron.showSaveDialog(defaultFilename, presetId);
 
       if (!outputPath) {
         // User cancelled
@@ -83,12 +85,13 @@ export function useExport(): UseExportReturn {
 
       // Set up progress listener
       const removeProgressListener = window.electron.onExportProgress((progressValue) => {
+        console.log('[useExport] Progress update:', progressValue);
         setProgress(progressValue);
       });
 
       try {
-        // Start export (pass projectState for auto-save before export)
-        await window.electron.exportVideo(clips, libraryClips, outputPath, projectState);
+        // Start export (pass projectState and advancedSettings)
+        await window.electron.exportVideo(clips, libraryClips, outputPath, projectState, advancedSettings);
 
         // Success - set output path
         setOutputPath(outputPath);
