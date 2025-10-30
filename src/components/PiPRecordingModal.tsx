@@ -586,9 +586,52 @@ const PiPRecordingModal: React.FC<PiPRecordingModalProps> = ({
                     <div className="screen-info">
                       <div className="screen-name">{screen.name}</div>
                       <div className="screen-resolution">{screen.resolution}</div>
+                      <div className="screen-debug" style={{ fontSize: '10px', color: '#666', marginTop: '4px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <span>ID: {screen.id.slice(0, 8)}... | Thumb: {screen.thumbnail ? 'Yes' : 'No'}</span>
+                        <span className={`source-type-badge source-type-${screen.type}`}>
+                          {screen.type.toUpperCase()}
+                        </span>
+                      </div>
                     </div>
                   </label>
                 ))}
+              </div>
+
+              <div className="audio-settings">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={audioMode === 'both' || audioMode === 'webcam-only'}
+                    onChange={(e) => {
+                      if (e.target.checked) {
+                        setAudioMode('both');
+                      } else {
+                        setAudioMode('screen-only');
+                      }
+                    }}
+                  />
+                  <span>Record microphone audio</span>
+                </label>
+
+                {(audioMode === 'both' || audioMode === 'webcam-only') && microphonePermissionStatus === 'granted' && audioDevices.length > 0 && (
+                  <select
+                    value={selectedMicrophoneId}
+                    onChange={(e) => setSelectedMicrophoneId(e.target.value)}
+                    className="audio-device-dropdown"
+                  >
+                    {audioDevices.map((device) => (
+                      <option key={device.deviceId} value={device.deviceId}>
+                        {device.label || `Microphone ${device.deviceId.slice(0, 8)}`}
+                      </option>
+                    ))}
+                  </select>
+                )}
+
+                {(audioMode === 'both' || audioMode === 'webcam-only') && microphonePermissionStatus === 'prompt' && (
+                  <button className="button-secondary" onClick={requestPermissions}>
+                    Request Permission
+                  </button>
+                )}
               </div>
 
               <div className="modal-buttons">
