@@ -141,10 +141,11 @@ contextBridge.exposeInMainWorld('electron', {
   /**
    * Opens native save dialog for export file
    * @param defaultFilename - Default filename for export (e.g., "ollo_export_20250129_120000.mp4")
+   * @param presetId - Optional preset ID for filename generation
    * @returns Promise<string | null> - file path or null if cancelled
    */
-  showSaveDialog: (defaultFilename: string): Promise<string | null> => {
-    return ipcRenderer.invoke('export:showSaveDialog', defaultFilename);
+  showSaveDialog: (defaultFilename: string, presetId?: string): Promise<string | null> => {
+    return ipcRenderer.invoke('export:showSaveDialog', defaultFilename, presetId);
   },
 
   /**
@@ -153,6 +154,7 @@ contextBridge.exposeInMainWorld('electron', {
    * @param libraryClips - Library clips for source files
    * @param outputPath - Output file path (absolute)
    * @param projectState - Optional project state for auto-save before export
+   * @param advancedSettings - Optional advanced export settings
    * @returns Promise<void>
    * @throws Error if export fails
    */
@@ -160,9 +162,10 @@ contextBridge.exposeInMainWorld('electron', {
     clips: any[],
     libraryClips: any[],
     outputPath: string,
-    projectState?: any
+    projectState?: any,
+    advancedSettings?: any
   ): Promise<void> => {
-    return ipcRenderer.invoke('export:start', clips, libraryClips, outputPath, projectState);
+    return ipcRenderer.invoke('export:start', clips, libraryClips, outputPath, projectState, advancedSettings);
   },
 
   /**

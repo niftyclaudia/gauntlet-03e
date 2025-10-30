@@ -15,7 +15,7 @@ import {
   deleteAutosaveFile,
   getAutosaveFileAge
 } from './fileSystem';
-import { VideoMetadata, SavedProjectState, TimelineClip, VideoClip } from '../types/video';
+import { VideoMetadata, SavedProjectState, TimelineClip, VideoClip, AdvancedExportSettings } from '../types/video';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -335,11 +335,33 @@ export function registerIpcHandlers(): void {
    * Opens native save dialog for export file
    * Returns: Promise<string | null> (file path or null if cancelled)
    */
-  ipcMain.handle('export:showSaveDialog', async (_event, defaultFilename: string): Promise<string | null> => {
+  ipcMain.handle('export:showSaveDialog', async (_event, defaultFilename: string, presetId?: string): Promise<string | null> => {
     try {
+      // Create exports folder structure: exports/YYYY-MM-DD/
+      const now = new Date();
+      const year = now.getFullYear();
+      const month = String(now.getMonth() + 1).padStart(2, '0');
+      const day = String(now.getDate()).padStart(2, '0');
+      const exportsDir = path.join(os.homedir(), 'Documents', 'ollo', 'exports', `${year}-${month}-${day}`);
+      
+      // Ensure exports directory exists
+      const fs = require('fs');
+      if (!fs.existsSync(exportsDir)) {
+        fs.mkdirSync(exportsDir, { recursive: true });
+        console.log(`[IPC] Created exports directory: ${exportsDir}`);
+      }
+
+      // Generate filename with preset if provided
+      let filename = defaultFilename;
+      if (presetId && presetId !== 'custom') {
+        const nameWithoutExt = path.parse(defaultFilename).name;
+        const ext = path.parse(defaultFilename).ext;
+        filename = `ollo_${presetId}_${nameWithoutExt}${ext}`;
+      }
+
       const result = await dialog.showSaveDialog({
         title: 'Export Video',
-        defaultPath: path.join(os.homedir(), 'Documents', defaultFilename),
+        defaultPath: path.join(exportsDir, filename),
         filters: [
           { name: 'MP4 Video', extensions: ['mp4'] }
         ],
@@ -367,7 +389,7 @@ export function registerIpcHandlers(): void {
   /**
    * Handler: export:start
    * Initiates video export process
-   * Params: clips (TimelineClip[]), libraryClips (VideoClip[]), outputPath (string)
+   * Params: clips (TimelineClip[]), libraryClips (VideoClip[]), outputPath (string), advancedSettings (AdvancedExportSettings?)
    * Returns: Promise<void>
    * Progress: Emits 'export:progress' events via IPC (0-100)
    */
@@ -376,7 +398,8 @@ export function registerIpcHandlers(): void {
     clips: TimelineClip[],
     libraryClips: VideoClip[],
     outputPath: string,
-    projectState?: SavedProjectState
+    projectState?: SavedProjectState,
+    advancedSettings?: AdvancedExportSettings
   ): Promise<void> => {
     try {
       // Validate inputs
@@ -401,9 +424,28 @@ export function registerIpcHandlers(): void {
         }
       }
 
-      // Calculate export settings
-      const settings = calculateExportSettings(clips, libraryClips);
-      console.log('[IPC] Export settings:', settings);
+      // Calculate export settings (use advanced settings if provided)
+      let settings;
+      if (advancedSettings) {
+        // Use advanced settings to create custom export settings
+        const preset = advancedSettings.preset;
+        settings = {
+          format: 'mp4' as const,
+          videoCodec: 'libx264' as const,
+          audioCodec: 'aac' as const,
+          framerate: advancedSettings.customFramerate || preset.framerate,
+          width: advancedSettings.customResolution?.width || preset.resolution.width,
+          height: advancedSettings.customResolution?.height || preset.resolution.height,
+          videoBitrate: advancedSettings.customBitrate || preset.bitrate,
+          audioBitrate: 128,
+          aspectRatioMode: 'letterbox' as const
+        };
+        console.log('[IPC] Using advanced export settings:', settings);
+      } else {
+        // Use default calculation
+        settings = calculateExportSettings(clips, libraryClips);
+        console.log('[IPC] Using default export settings:', settings);
+      }
 
       // Get the main window to send progress events
       const mainWindow = BrowserWindow.getAllWindows()[0];
@@ -421,6 +463,7 @@ export function registerIpcHandlers(): void {
         },
         (progress) => {
           // Emit progress event to renderer
+          console.log('[IPC] Sending progress:', progress);
           mainWindow.webContents.send('export:progress', progress);
         }
       );
