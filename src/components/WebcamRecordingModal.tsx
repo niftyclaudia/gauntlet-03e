@@ -1,5 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { RecordingSession, CameraDevice, EncodedRecording } from '../types/video';
+import { TeleprompterScript } from '../types/teleprompter';
+import TeleprompterModal from './TeleprompterModal';
+import ScriptDisplay from './ScriptDisplay';
 
 interface WebcamRecordingModalProps {
   isOpen: boolean;
@@ -31,6 +34,14 @@ const WebcamRecordingModal: React.FC<WebcamRecordingModalProps> = ({
   const [streamAttached, setStreamAttached] = useState<boolean>(false);
   const handleRecordingCompleteRef = useRef<(blob: Blob) => Promise<void>>();
   const recordingChunksRef = useRef<Blob[]>([]);
+  
+  // Teleprompter state
+  const [teleprompterScript, setTeleprompterScript] = useState<TeleprompterScript | null>(null);
+  const [showTeleprompterModal, setShowTeleprompterModal] = useState<boolean>(false);
+  const [showTeleprompterOverlay, setShowTeleprompterOverlay] = useState<boolean>(false);
+  const [teleprompterIsPlaying, setTeleprompterIsPlaying] = useState<boolean>(false);
+  const [teleprompterScrollSpeed, setTeleprompterScrollSpeed] = useState<number>(150); // WPM
+  const [teleprompterFontSize, setTeleprompterFontSize] = useState<number>(32); // pixels
 
   // Attach media stream to video element when available
   useEffect(() => {
@@ -524,6 +535,12 @@ const WebcamRecordingModal: React.FC<WebcamRecordingModalProps> = ({
             startTime: Date.now(),
             elapsedSeconds: 0,
           }));
+
+          // Auto-show teleprompter overlay if script exists
+          if (teleprompterScript) {
+            setShowTeleprompterOverlay(true);
+            setTeleprompterIsPlaying(true);
+          }
           
           // Verify recording actually started
           setTimeout(() => {
@@ -560,7 +577,7 @@ const WebcamRecordingModal: React.FC<WebcamRecordingModalProps> = ({
         errorMessage: 'Failed to start recording. Please try again.'
       }));
     }
-  }, [session.mediaStream]);
+  }, [session.mediaStream, teleprompterScript]);
 
   // Stop recording
   const stopRecording = useCallback(() => {
@@ -888,6 +905,13 @@ const WebcamRecordingModal: React.FC<WebcamRecordingModalProps> = ({
             {session.status !== 'recording' && (
               <>
                 <button
+                  onClick={() => setShowTeleprompterModal(true)}
+                  className="button-secondary"
+                  style={{ marginRight: 'auto' }}
+                >
+                  {teleprompterScript ? 'Edit Script' : 'Generate Script'}
+                </button>
+                <button
                   onClick={startRecording}
                   className="button-primary"
                 >
@@ -907,6 +931,15 @@ const WebcamRecordingModal: React.FC<WebcamRecordingModalProps> = ({
 
             {session.status === 'recording' && (
               <>
+                {teleprompterScript && (
+                  <button
+                    onClick={() => setShowTeleprompterOverlay(!showTeleprompterOverlay)}
+                    className="button-secondary"
+                    style={{ marginRight: 'auto' }}
+                  >
+                    {showTeleprompterOverlay ? 'Hide Teleprompter' : 'Show Teleprompter'}
+                  </button>
+                )}
                 {session.elapsedSeconds < 1 && (
                   <p style={{ color: '#ffaa00', fontSize: '12px', marginBottom: '8px' }}>
                     Record for at least 1 second
@@ -923,7 +956,38 @@ const WebcamRecordingModal: React.FC<WebcamRecordingModalProps> = ({
               </>
             )}
           </div>
+
+          {/* Teleprompter Overlay */}
+          {session.status === 'recording' && teleprompterScript && showTeleprompterOverlay && (
+            <ScriptDisplay
+              script={teleprompterScript.content}
+              isPlaying={teleprompterIsPlaying}
+              scrollSpeed={teleprompterScrollSpeed}
+              fontSize={teleprompterFontSize}
+              onPlayPause={() => setTeleprompterIsPlaying(!teleprompterIsPlaying)}
+              onSpeedChange={(speed) => setTeleprompterScrollSpeed(speed)}
+              onReset={() => {
+                // Reset handled internally by ScriptDisplay
+              }}
+              onClose={() => setShowTeleprompterOverlay(false)}
+            />
+          )}
         </div>
+
+        {/* Teleprompter Modal */}
+        <TeleprompterModal
+          isOpen={showTeleprompterModal}
+          onClose={() => setShowTeleprompterModal(false)}
+          onScriptAccepted={(script) => {
+            setTeleprompterScript(script);
+            setShowTeleprompterModal(false);
+            // Auto-show overlay when recording starts if script exists
+            if (session.status === 'recording') {
+              setShowTeleprompterOverlay(true);
+            }
+          }}
+          existingScript={teleprompterScript}
+        />
       </div>
     );
   }

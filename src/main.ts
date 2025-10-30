@@ -1,10 +1,15 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'node:path';
 import started from 'electron-squirrel-startup';
+import dotenv from 'dotenv';
 import { registerIpcHandlers } from './main/ipcHandlers';
 import { registerRecordingHandlers } from './main/ipc-handlers/recordingHandlers';
 import { registerWebcamHandlers } from './main/ipc-handlers/webcam';
 import { registerPiPHandlers } from './main/ipc-handlers/pip';
+import { registerAiHandlers } from './main/ipc-handlers/ai';
+
+// Load environment variables from .env file
+dotenv.config();
 
 // Handle creating/removing shortcuts on Windows when installing/uninstalling.
 if (started) {
@@ -60,6 +65,7 @@ app.on('ready', () => {
     registerRecordingHandlers();
     registerWebcamHandlers();
     registerPiPHandlers();
+    registerAiHandlers();
     console.log('[Main] IPC handlers registered successfully');
   } catch (error) {
     console.error('[Main] Failed to register IPC handlers:', error);
