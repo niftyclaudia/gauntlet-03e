@@ -8,9 +8,12 @@
  */
 
 import React, { useState, useCallback, useEffect, useRef } from 'react';
+import MenuBar from './components/MenuBar';
+import Toolbar from './components/Toolbar';
 import Library from './components/Library';
 import VideoPlayer from './components/VideoPlayer';
 import Timeline from './components/Timeline';
+import TimelineZoomControls from './components/TimelineZoomControls';
 import RecordScreenDialog from './components/RecordScreenDialog';
 import RecordingIndicator from './components/RecordingIndicator';
 import RecordingPermissionDialog from './components/RecordingPermissionDialog';
@@ -21,6 +24,7 @@ import { VideoClip, TimelineClip } from './types/video';
 import { addClipToTimeline, reorderTimelineClip, removeClipFromTimeline, splitClipAtPlayhead } from './utils/timelineOperations';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useSessionRestore } from './hooks/useSessionRestore';
+import { useFileImport } from './hooks/useFileImport';
 import { serializeProjectState } from './utils/projectStateUtils';
 
 // Simple UUID v4 generator
@@ -37,6 +41,9 @@ const App: React.FC = () => {
   const [library, setLibrary] = useState<VideoClip[]>([]);
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
 
+  // File import hook (for toolbar)
+  const { handleFileImport: importFiles } = useFileImport();
+
   // Timeline state
   const [timeline, setTimeline] = useState<TimelineClip[]>([]);
   const [timelineZoom, setTimelineZoom] = useState<number>(1.0);
@@ -45,6 +52,11 @@ const App: React.FC = () => {
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isExporting] = useState<boolean>(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  
+  // Refs for click-outside detection
+  const timelineRef = useRef<HTMLDivElement>(null);
+  const selectedClipIdRef = useRef<string | null>(null);
+  const timelineContainerRef = useRef<HTMLDivElement>(null);
   
   // Split state
 
@@ -113,14 +125,15 @@ const App: React.FC = () => {
   /**
    * Handle clip selection on timeline
    */
-  const handleTimelineSelectClip = (clipId: string | null) => {
+  const handleTimelineSelectClip = useCallback((clipId: string | null) => {
+    console.log(`[App] handleTimelineSelectClip called: clipId=${clipId}, current selectedClipId=${selectedClipId}, stack:`, new Error().stack);
     setSelectedClipId(clipId);
     if (clipId) {
       console.log(`[App] Selected timeline clip: ${clipId}`);
     } else {
       console.log(`[App] Deselected clip`);
     }
-  };
+  }, [selectedClipId]);
 
   /**
    * Handle deleting clip from timeline
@@ -346,10 +359,57 @@ const App: React.FC = () => {
     onRestore: handleRestoreState,
   });
 
+  // Sync ref with selectedClipId
+  useEffect(() => {
+    selectedClipIdRef.current = selectedClipId;
+  }, [selectedClipId]);
+
+  // Handle clicks outside the Timeline to deselect clips
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const currentSelectedClipId = selectedClipIdRef.current;
+      
+      // Only deselect timeline clips (not library clips)
+      const isTimelineClip = currentSelectedClipId && timeline.some(clip => clip.id === currentSelectedClipId);
+      if (!isTimelineClip) {
+        return;
+      }
+
+      const target = e.target as Node;
+      
+      // Check if click is outside timeline
+      if (timelineRef.current && !timelineRef.current.contains(target)) {
+        console.log('[App] Clicked outside timeline, deselecting clip');
+        handleTimelineSelectClip(null);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [timeline, handleTimelineSelectClip]);
+
   // Unified recording handlers
   const handleRecordClick = useCallback(() => {
     setShowRecordingTypeModal(true);
   }, []);
+
+  // Handle toolbar add files
+  const handleToolbarAddFiles = useCallback(async () => {
+    try {
+      const filePaths = await window.electron.selectFiles();
+      if (filePaths.length > 0) {
+        const importedClips = await importFiles(filePaths);
+        if (importedClips.length > 0) {
+          setLibrary(prev => [...importedClips, ...prev]);
+          console.log(`[App] Imported ${importedClips.length} clip(s) via toolbar.`);
+        }
+      }
+    } catch (err) {
+      console.error('[App] File import error:', err);
+    }
+  }, [importFiles]);
 
   const handleSelectScreenRecording = useCallback(() => {
     setShowRecordingTypeModal(false);
@@ -640,14 +700,25 @@ const App: React.FC = () => {
   }, [recordingSessionId]);
 
   return (
-    <div className="app-container">
-      {/* Auto-save status bar (top of app, below title bar) */}
+    <div className="flex flex-col w-full h-full bg-[#1a1a1a] text-white">
+      {/* Menu Bar */}
+      <MenuBar />
+      
+      {/* Toolbar */}
+      <Toolbar 
+        onAddFiles={handleToolbarAddFiles}
+        onExport={() => {/* Handle export via VideoPlayer */}}
+        onRecord={handleRecordClick}
+      />
+      
+      {/* Auto-save status bar (below toolbar) */}
       {lastSavedTime && (
-        <div className="autosave-status-bar">
-          <span className="autosave-status-text">Auto saved: {lastSavedTime}</span>
+        <div className="h-[22px] bg-[#1a1a1a] text-white flex items-center justify-center text-xs z-[100] pointer-events-none border-b border-[#333333]">
+          <span className="text-[#999999] font-normal">Auto saved: {lastSavedTime}</span>
         </div>
       )}
-      <div className="main-content" style={{ marginTop: lastSavedTime ? '22px' : '0' }}>
+      {/* Top section: Library + VideoPlayer - constrained to 50% height */}
+      <div className="flex overflow-hidden" style={{ height: lastSavedTime ? 'calc(50% - 22px)' : '50%', maxHeight: lastSavedTime ? 'calc(50vh - 22px)' : '50vh' }}>
         <Library 
           library={library}
           onImportComplete={handleImportComplete}
@@ -721,25 +792,40 @@ const App: React.FC = () => {
           <p>Processing recording...</p>
         </div>
       )}
-      <Timeline
-        timeline={timeline}
-        library={library}
-        selectedClipId={selectedClipId}
-        currentPlayheadPosition={currentPlayheadPosition}
-        timelineZoom={timelineZoom}
-        timelineScrollPosition={timelineScrollPosition}
-        onAddClip={handleAddClipToTimeline}
-        onReorderClip={handleReorderClip}
-        onSelectClip={handleTimelineSelectClip}
-        onDeleteClip={handleDeleteClip}
-        onClearAll={handleClearAll}
-        onZoomChange={setTimelineZoom}
-        onScrollChange={setTimelineScrollPosition}
-        onPlayheadChange={setCurrentPlayheadPosition}
-        onTrimUpdate={handleTrimUpdate}
-        onSplitClip={handleSplitClip}
-        isPlayheadOverClip={isPlayheadOverClip()}
-      />
+      {/* Timeline Section - takes remaining 50% of height */}
+      <div ref={timelineRef} className="flex flex-col overflow-hidden" style={{ height: '50%' }}>
+        <Timeline
+          timeline={timeline}
+          library={library}
+          selectedClipId={selectedClipId}
+          currentPlayheadPosition={currentPlayheadPosition}
+          timelineZoom={timelineZoom}
+          timelineScrollPosition={timelineScrollPosition}
+          onAddClip={handleAddClipToTimeline}
+          onReorderClip={handleReorderClip}
+          onSelectClip={handleTimelineSelectClip}
+          onDeleteClip={handleDeleteClip}
+          onClearAll={handleClearAll}
+          onZoomChange={setTimelineZoom}
+          onScrollChange={setTimelineScrollPosition}
+          onPlayheadChange={setCurrentPlayheadPosition}
+          onTrimUpdate={handleTrimUpdate}
+          onSplitClip={handleSplitClip}
+          isPlayheadOverClip={isPlayheadOverClip()}
+          timelineContainerRefCallback={(ref) => { timelineContainerRef.current = ref.current; }}
+        />
+        
+        {/* Zoom Controls Bar - directly below timeline, no gap */}
+        <div className="flex-shrink-0 px-4 py-2 border-t border-[#333333] bg-[#2a2a2a]">
+          <TimelineZoomControls
+            zoom={timelineZoom}
+            onZoomChange={setTimelineZoom}
+            timeline={timeline}
+            library={library}
+            timelineContainerRef={timelineContainerRef}
+          />
+        </div>
+      </div>
     </div>
   );
 };

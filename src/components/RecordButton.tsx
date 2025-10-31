@@ -16,13 +16,13 @@ interface RecordButtonProps {
 const RecordButton: React.FC<RecordButtonProps> = ({ onClick, disabled = false }) => {
   return (
     <button
-      className="record-button"
+      className="bg-[#ff4444] text-white border-none rounded-md px-4 py-2 text-sm font-medium cursor-pointer flex items-center gap-2 transition-colors hover:bg-[#e03e3e] disabled:bg-[#666666] disabled:cursor-not-allowed"
       onClick={onClick}
       disabled={disabled}
       title="Record Video"
     >
-      <span className="record-icon">●</span>
-      <span className="record-label">Record</span>
+      <span className="text-xs">●</span>
+      <span>Record</span>
     </button>
   );
 };

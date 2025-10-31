@@ -719,6 +719,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           // Select the timeline clip so spacebar works correctly (deselects any library clip)
           if (onSelectClip && !isDragging) {
             // Only change selection on click, not during drag (avoid rapid state changes)
+            console.log('[VideoPlayer] Calling onSelectClip with clip.id:', targetItem.clip.id);
             onSelectClip(targetItem.clip.id);
           }
           
@@ -731,6 +732,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           }
           
           // Video source will be updated by the effect watching currentVideo
+          lastPlayheadPositionRef.current = currentPlayheadPosition;
+          return;
+        } else {
+          // Clicked outside of all clips - deselect the current clip
+          console.log('[VideoPlayer] Clicked outside clips, deselecting. clipIndex:', clipIndex);
+          if (onSelectClip && !isDragging) {
+            console.log('[VideoPlayer] Calling onSelectClip with null to deselect');
+            onSelectClip(null);
+          }
           lastPlayheadPositionRef.current = currentPlayheadPosition;
           return;
         }
@@ -1549,9 +1559,9 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   }, [isPlaying]);
 
   return (
-    <div className="preview-panel">
+    <div className="flex-1 bg-[#1a1a1a] p-4 flex flex-col overflow-hidden gap-4 min-w-0 relative max-h-full">
       {/* Toolbar: Sequence Preview, Record Screen, and Export Buttons */}
-      <div className="sequence-preview-container">
+      <div className="flex-shrink-0 flex justify-end">
         <SequencePreviewButton
           isEmpty={timeline.length === 0}
           onClick={handleSequencePreview}
@@ -1563,11 +1573,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           />
         )}
         <button
-          className="export-button"
+          className="bg-[#0066cc] text-white border-none rounded-md px-4 py-2 text-sm font-medium cursor-pointer transition-colors hover:bg-[#0052a3] disabled:bg-[#333333] disabled:text-[#666666] disabled:cursor-not-allowed ml-2"
           onClick={handleExportClick}
           disabled={timeline.length === 0 || exportHook.isExporting}
           aria-label="Export video"
-          style={{ marginLeft: '8px' }}
         >
           {exportHook.isExporting ? 'Exporting...' : 'Export'}
         </button>
@@ -1580,50 +1589,49 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         error={exportHook.error}
       />
 
-      {/* Video container with 16:9 aspect ratio */}
-      <div className="video-container">
-        {playerState.error ? (
-          <div className="video-error">
-            <p>{playerState.error}</p>
-          </div>
-        ) : !playerState.currentVideo ? (
-          <div className="video-empty">
-            <div className="video-icon">▶</div>
-            <p>No clip selected</p>
-          </div>
-        ) : (
-          <>
-            {/* Always render video element when currentVideo exists (so ref is available) */}
-            <video
-              key={playerState.currentVideo?.id || 'no-video'}
-              ref={videoRef}
-              className="video-element"
-              src={playerState.currentVideo ? 
-                (playerState.currentVideo.path.startsWith('/') 
-                  ? `file://${encodeURI(playerState.currentVideo.path).replace(/#/g, '%23')}`
-                  : `file:///${encodeURI(playerState.currentVideo.path).replace(/#/g, '%23')}`) 
-                : ''}
-              onLoadedMetadata={handleLoadedMetadata}
-              onTimeUpdate={handleTimeUpdate}
-              onEnded={handleEnded}
-              onError={handleError}
-              onLoadStart={handleLoadStart}
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                opacity: playerState.isLoading ? 0 : 1,
-              }}
-            />
-            {/* Show loading overlay when loading */}
-            {playerState.isLoading && (
-              <div className="video-loading-overlay">
-                <div className="spinner"></div>
-                <p>Loading video...</p>
-              </div>
-            )}
-          </>
-        )}
+      {/* Video container with constrained height */}
+      <div className="flex-shrink-0 relative flex items-center justify-center bg-black rounded-lg overflow-hidden max-h-[60vh]">
+        <div className="w-full h-0 pb-[56.25%] relative"> {/* 16:9 aspect ratio container */}
+          {playerState.error ? (
+            <div className="absolute inset-0 flex items-center justify-center p-6 text-[#cc0000]">
+              <p className="text-sm font-medium">{playerState.error}</p>
+            </div>
+          ) : !playerState.currentVideo ? (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-4 text-[#666666]">
+              <div className="text-[64px] opacity-50">▶</div>
+              <p className="text-sm">No clip selected</p>
+            </div>
+          ) : (
+            <>
+              {/* Always render video element when currentVideo exists (so ref is available) */}
+              <video
+                key={playerState.currentVideo?.id || 'no-video'}
+                ref={videoRef}
+                className="absolute inset-0 w-full h-full object-contain"
+                src={playerState.currentVideo ? 
+                  (playerState.currentVideo.path.startsWith('/') 
+                    ? `file://${encodeURI(playerState.currentVideo.path).replace(/#/g, '%23')}`
+                    : `file:///${encodeURI(playerState.currentVideo.path).replace(/#/g, '%23')}`) 
+                  : ''}
+                onLoadedMetadata={handleLoadedMetadata}
+                onTimeUpdate={handleTimeUpdate}
+                onEnded={handleEnded}
+                onError={handleError}
+                onLoadStart={handleLoadStart}
+                style={{
+                  opacity: playerState.isLoading ? 0 : 1,
+                }}
+              />
+              {/* Show loading overlay when loading */}
+              {playerState.isLoading && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 bg-[rgba(26,26,26,0.8)] text-[#999999] z-10">
+                  <div className="w-8 h-8 border-[3px] border-[#333333] border-t-[#0066cc] rounded-full animate-spin"></div>
+                  <p className="text-sm">Loading video...</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
       </div>
 
       {/* Player Controls */}

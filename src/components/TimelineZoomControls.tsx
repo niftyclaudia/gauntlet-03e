@@ -129,15 +129,15 @@ const TimelineZoomControls: React.FC<TimelineZoomControlsProps> = ({
   const sliderPosition = zoomToSliderPosition(zoom);
 
   return (
-    <div className="timeline-zoom-controls">
+    <div className="flex items-center gap-1">
       <button
         type="button"
-        className="timeline-zoom-fit-button"
+        className="flex items-center justify-center w-7 h-7 border-none rounded bg-[#2a2a2a] text-white cursor-pointer transition-colors hover:bg-[#3a3a3a] active:bg-[#4a4a4a] disabled:opacity-40 disabled:cursor-not-allowed p-0"
         onClick={handleZoomToFit}
         title="Zoom to Fit Timeline"
         aria-label="Zoom to Fit Timeline"
       >
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
           {/* Ruler with magnifying glass icon */}
           <path d="M2 4h12M2 6h2M2 8h2M2 10h2" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
           <circle cx="11" cy="7" r="3" stroke="currentColor" strokeWidth="1.5" fill="none"/>
@@ -146,13 +146,13 @@ const TimelineZoomControls: React.FC<TimelineZoomControlsProps> = ({
       </button>
       <button
         type="button"
-        className="timeline-zoom-out-button"
+        className="flex items-center justify-center w-7 h-7 border-none rounded bg-[#2a2a2a] text-white cursor-pointer transition-colors hover:bg-[#3a3a3a] active:bg-[#4a4a4a] disabled:opacity-40 disabled:cursor-not-allowed p-0"
         onClick={handleZoomOut}
         disabled={zoom <= MIN_ZOOM}
         title="Zoom Out"
         aria-label="Zoom Out"
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
           <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.5" fill="none"/>
           <path d="M4 7h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>
@@ -164,19 +164,19 @@ const TimelineZoomControls: React.FC<TimelineZoomControlsProps> = ({
         step={0.001}
         value={sliderPosition}
         onChange={handleSliderChange}
-        className="timeline-zoom-slider"
+        className="w-[120px] h-1 rounded-sm outline-none cursor-pointer mx-1 appearance-none [&::-webkit-slider-runnable-track]:w-full [&::-webkit-slider-runnable-track]:h-1 [&::-webkit-slider-runnable-track]:rounded-sm [&::-webkit-slider-runnable-track]:bg-gradient-to-r [&::-webkit-slider-runnable-track]:from-white [&::-webkit-slider-runnable-track]:to-[#333333] [&::-webkit-slider-runnable-track]:[background-size:var(--slider-progress),100%] [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3 [&::-webkit-slider-thumb]:h-3 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-white [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-all [&::-webkit-slider-thumb]:border [&::-webkit-slider-thumb]:border-[#333333] [&::-webkit-slider-thumb]:-mt-1 [&::-webkit-slider-thumb]:hover:bg-[#e0e0e0] [&::-webkit-slider-thumb]:hover:scale-110 [&::-webkit-slider-thumb]:active:bg-[#cccccc] [&::-webkit-slider-thumb]:active:scale-110 [&::-moz-range-track]:w-full [&::-moz-range-track]:h-1 [&::-moz-range-track]:rounded-sm [&::-moz-range-track]:bg-gradient-to-r [&::-moz-range-track]:from-white [&::-moz-range-track]:to-[#333333] [&::-moz-range-thumb]:w-3 [&::-moz-range-thumb]:h-3 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-white [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:transition-all [&::-moz-range-thumb]:hover:bg-[#e0e0e0] [&::-moz-range-thumb]:hover:scale-110 [&::-moz-range-thumb]:active:bg-[#cccccc] [&::-moz-range-thumb]:active:scale-110"
         aria-label="Timeline zoom level"
         style={{ '--slider-progress': `${sliderPosition * 100}%` } as React.CSSProperties}
       />
       <button
         type="button"
-        className="timeline-zoom-in-button"
+        className="flex items-center justify-center w-7 h-7 border-none rounded bg-[#2a2a2a] text-white cursor-pointer transition-colors hover:bg-[#3a3a3a] active:bg-[#4a4a4a] disabled:opacity-40 disabled:cursor-not-allowed p-0"
         onClick={handleZoomIn}
         disabled={zoom >= MAX_ZOOM}
         title="Zoom In"
         aria-label="Zoom In"
       >
-        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg" className="flex-shrink-0">
           <circle cx="7" cy="7" r="6" stroke="currentColor" strokeWidth="1.5" fill="none"/>
           <path d="M4 7h6M7 4v6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
         </svg>

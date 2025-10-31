@@ -17,6 +17,8 @@ interface PlayheadProps {
   onDrag?: (position: number) => void;
   /** Callback when drag ends */
   onDragEnd?: () => void;
+  /** Callback when playhead is clicked (not dragged) */
+  onClick?: (position: number) => void;
   /** Total duration for clamping */
   totalDuration?: number;
 }
@@ -27,22 +29,27 @@ const Playhead: React.FC<PlayheadProps> = ({
   timelineHeight, 
   onDrag,
   onDragEnd,
+  onClick,
   totalDuration = Infinity,
 }) => {
   // Pixels per second at 100% zoom - matches timelineCalculations.ts
   const BASE_PIXELS_PER_SECOND = 10;
   const xPosition = position * zoom * BASE_PIXELS_PER_SECOND;
   const isDraggingRef = React.useRef(false);
+  const mouseDownPositionRef = React.useRef<{ x: number; y: number } | null>(null);
+  const hasMovedRef = React.useRef(false);
 
   /**
    * Handle mouse down on playhead (start drag)
    */
   const handleMouseDown = (e: React.MouseEvent) => {
-    if (!onDrag) return;
+    if (!onDrag && !onClick) return;
     
     e.preventDefault();
     e.stopPropagation();
     isDraggingRef.current = true;
+    hasMovedRef.current = false;
+    mouseDownPositionRef.current = { x: e.clientX, y: e.clientY };
 
     // Find the timeline container (store it once)
     const playheadElement = e.currentTarget as HTMLElement;
@@ -55,6 +62,16 @@ const Playhead: React.FC<PlayheadProps> = ({
 
     const handleMouseMove = (moveEvent: MouseEvent) => {
       if (!isDraggingRef.current || !timelineContainer) return;
+
+      // Track if mouse has moved (to distinguish click from drag)
+      if (mouseDownPositionRef.current) {
+        const deltaX = Math.abs(moveEvent.clientX - mouseDownPositionRef.current.x);
+        const deltaY = Math.abs(moveEvent.clientY - mouseDownPositionRef.current.y);
+        // Consider it a drag if moved more than 3 pixels in any direction
+        if (deltaX > 3 || deltaY > 3) {
+          hasMovedRef.current = true;
+        }
+      }
 
       const clipsContainer = timelineContainer.querySelector('.timeline-clips-container') as HTMLElement;
       if (!clipsContainer) return;
@@ -69,18 +86,31 @@ const Playhead: React.FC<PlayheadProps> = ({
       const clampedPosition = Math.max(0, Math.min(newPosition, totalDuration));
       
       console.log('[Playhead] Dragging to:', clampedPosition, 'seconds');
-      onDrag(clampedPosition);
+      if (onDrag) {
+        onDrag(clampedPosition);
+      }
     };
 
     const handleMouseUp = () => {
+      const wasDragging = isDraggingRef.current;
+      const didMove = hasMovedRef.current;
       isDraggingRef.current = false;
       document.removeEventListener('mousemove', handleMouseMove);
       document.removeEventListener('mouseup', handleMouseUp);
+      
+      // If mouse didn't move significantly, treat as click
+      if (wasDragging && !didMove && onClick) {
+        console.log('[Playhead] Click detected (no drag), seeking to position:', position);
+        onClick(position);
+      }
       
       // Notify parent that drag ended
       if (onDragEnd) {
         onDragEnd();
       }
+      
+      mouseDownPositionRef.current = null;
+      hasMovedRef.current = false;
     };
 
     document.addEventListener('mousemove', handleMouseMove);
@@ -113,15 +143,15 @@ const Playhead: React.FC<PlayheadProps> = ({
         e.stopPropagation();
       }}
     >
-      {/* Triangle handle at top - now in ruler area (white playhead) */}
+      {/* Diamond handle at top - OpenShot style (blue) */}
       <div
         style={{
-          width: '14px',
+          width: '12px',
           height: '12px',
-          background: '#ffffff',
-          clipPath: 'polygon(50% 100%, 0% 0%, 100% 0%)',
-          boxShadow: '0 0 4px rgba(255, 255, 255, 0.4)',
-          borderBottom: '1px solid rgba(255, 255, 255, 0.3)',
+          background: '#4A90E2',
+          transform: 'rotate(45deg)',
+          boxShadow: '0 0 6px rgba(74, 144, 226, 0.6)',
+          border: '1px solid rgba(74, 144, 226, 0.8)',
           zIndex: 1001, // Above the playhead container
         }}
       />
@@ -131,8 +161,8 @@ const Playhead: React.FC<PlayheadProps> = ({
         style={{
           width: '2px',
           height: '40px', // Height of ruler area
-          background: '#ffffff',
-          boxShadow: '0 0 3px rgba(255, 255, 255, 0.4)',
+          background: '#4A90E2',
+          boxShadow: '0 0 6px rgba(74, 144, 226, 0.6)',
         }}
       />
       
@@ -141,8 +171,8 @@ const Playhead: React.FC<PlayheadProps> = ({
         style={{
           width: '2px',
           flex: 1,
-          background: '#ffffff',
-          boxShadow: '0 0 3px rgba(255, 255, 255, 0.4)',
+          background: '#4A90E2',
+          boxShadow: '0 0 6px rgba(74, 144, 226, 0.6)',
         }}
       />
     </div>

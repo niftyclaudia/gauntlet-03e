@@ -8,7 +8,6 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { TimelineClip, VideoClip } from '../types/video';
 import TimelineClipCard from './TimelineClipCard';
-import TimelineZoomControls from './TimelineZoomControls';
 import TimelineSplitButton from './TimelineSplitButton';
 import SnapIndicator from './SnapIndicator';
 import CutLine from './CutLine';
@@ -56,6 +55,8 @@ interface TimelineProps {
   onSplitClip?: () => void;
   /** Whether playhead is currently over a clip */
   isPlayheadOverClip?: boolean;
+  /** Ref callback to expose timeline container ref */
+  timelineContainerRefCallback?: (ref: React.RefObject<HTMLDivElement>) => void;
 }
 
 const Timeline: React.FC<TimelineProps> = ({
@@ -76,10 +77,19 @@ const Timeline: React.FC<TimelineProps> = ({
   onTrimUpdate,
   onSplitClip,
   isPlayheadOverClip = false,
+  timelineContainerRefCallback,
 }) => {
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const clipsContainerRef = useRef<HTMLDivElement>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
+  
+  // Expose timeline container ref to parent
+  useEffect(() => {
+    if (timelineContainerRefCallback && timelineContainerRef.current) {
+      timelineContainerRefCallback(timelineContainerRef as React.RefObject<HTMLDivElement>);
+    }
+  }, [timelineContainerRefCallback]);
+  
   const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
   const [isDraggingFromLibrary, setIsDraggingFromLibrary] = useState(false);
   const [isReordering, setIsReordering] = useState(false);
@@ -97,6 +107,12 @@ const Timeline: React.FC<TimelineProps> = ({
 
   // Sort timeline clips by order (needed for calculations)
   const sortedTimeline = [...timeline].sort((a, b) => a.order - b.order);
+
+  // Wrapper for onSelectClip to add logging
+  const handleSelectClip = (clipId: string | null) => {
+    console.log(`[Timeline] handleSelectClip called with clipId=${clipId}, current selectedClipId=${selectedClipId}`);
+    onSelectClip(clipId);
+  };
 
   // Calculate total duration
   const totalDuration = calculateTotalDuration(timeline, library);
@@ -386,7 +402,7 @@ const Timeline: React.FC<TimelineProps> = ({
         onPlayheadChange(clampedPosition);
       } else {
         // Just deselect if no playhead change handler
-        onSelectClip(null);
+        handleSelectClip(null);
       }
     }
   };
@@ -626,23 +642,23 @@ const Timeline: React.FC<TimelineProps> = ({
   };
 
   return (
-    <div className="timeline-panel">
+    <div className="flex-1 bg-[#1a1a1a] border-t border-[#333333] p-0 flex flex-col overflow-visible">
       {/* Header with total duration and Clear All button */}
-      <div className="timeline-header">
-        <div className="timeline-header-left">
+      <div className="flex justify-between items-center px-4 py-2 border-b border-[#333333] bg-[#1a1a1a] flex-shrink-0">
+        <div className="flex items-center">
         </div>
-        <div className="timeline-header-right">
-          <div className="timeline-controls">
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
             <TimelineSplitButton
               enabled={isPlayheadOverClip}
               onClick={onSplitClip || (() => console.log('Split clicked'))}
             />
           </div>
-          <span className="timeline-total-duration">
+          <span className="text-sm font-medium text-white">
             Total: {formatDuration(totalDuration)}
           </span>
           <button
-            className="timeline-clear-all-button"
+            className="bg-transparent text-[#cccccc] border border-[#444444] rounded px-3 py-1.5 text-xs font-medium cursor-pointer transition-colors hover:bg-[#2a2a2a] hover:border-[#555555] disabled:bg-[#333333] disabled:text-[#666666] disabled:cursor-not-allowed disabled:border-[#333333]"
             onClick={handleClearAllClick}
             disabled={timeline.length === 0}
           >
@@ -652,22 +668,32 @@ const Timeline: React.FC<TimelineProps> = ({
       </div>
 
       {/* Two-column content wrapper */}
-      <div className="timeline-content">
+      <div className="flex flex-1 overflow-visible min-h-0">
         {/* Left column: Track controls */}
-        <div className="timeline-controls-column" tabIndex={-1}>
-          <div className="timeline-track-row" tabIndex={-1}>
-            <div className="track-control-header" tabIndex={-1}>
-              <div className="track-header-placeholder" tabIndex={-1}>Track 1</div>
+        <div className="w-[120px] min-w-[120px] bg-[#1a1a1a] border-r border-[#333333] flex flex-col overflow-y-auto overflow-x-visible flex-shrink-0 relative outline-none" tabIndex={-1}>
+          {/* Track row - shows Track 4, Track 5 like OpenShot */}
+          <div className="flex flex-col min-h-[110px] border-b border-[#333333] outline-none" tabIndex={-1}>
+            <div className="flex items-center justify-start px-2 py-3 outline-none border-none gap-1" tabIndex={-1}>
+              <span className="text-[#ffffff] text-[11px] font-medium uppercase tracking-wider outline-none border-none">Track 4</span>
             </div>
           </div>
+          
+          {/* Add another track row for Track 5 if there are clips */}
+          {timeline.length > 0 && (
+            <div className="flex flex-col min-h-[110px] border-b border-[#333333] outline-none" tabIndex={-1}>
+              <div className="flex items-center justify-start px-2 py-3 outline-none border-none gap-1" tabIndex={-1}>
+                <span className="text-[#ffffff] text-[11px] font-medium uppercase tracking-wider outline-none border-none">Track 5</span>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Right column: Timeline */}
-        <div className="timeline-track-column">
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           {/* Time Ruler */}
           <div 
             ref={rulerRef} 
-            className="timeline-ruler-wrapper" 
+            className="relative overflow-x-auto overflow-y-hidden w-full bg-[#1a1a1a]" 
             style={{ 
               position: 'relative', 
               overflowX: 'auto',
@@ -699,7 +725,7 @@ const Timeline: React.FC<TimelineProps> = ({
           {/* Timeline container with clips */}
           <div
             ref={timelineContainerRef}
-            className={`timeline-container ${isDraggingFromLibrary ? 'timeline-drag-over' : ''}`}
+            className={`flex-1 overflow-x-auto overflow-y-visible bg-[#2a2a2a] relative cursor-default mt-0 pt-[46px] ${isDraggingFromLibrary ? 'border-2 border-dashed border-[#0066cc] bg-[rgba(0,102,204,0.1)]' : ''}`}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
@@ -713,6 +739,22 @@ const Timeline: React.FC<TimelineProps> = ({
               timelineHeight={110}
               onDrag={handlePlayheadDragChange}
               onDragEnd={handlePlayheadDragEnd}
+              onClick={(position) => {
+                // When playhead is clicked (not dragged), activate preview and seek to that position
+                // This ensures the video player displays the frame at that timestamp
+                // Force a seek by temporarily changing position by a significant amount to trigger user interaction detection
+                if (onPlayheadChange) {
+                  console.log('[Timeline] Playhead clicked, activating preview at:', position);
+                  // Temporarily set to a slightly different value (0.2s is enough to trigger user interaction detection)
+                  // This ensures VideoPlayer detects it as a user interaction and activates preview
+                  const epsilon = 0.15; // Enough to trigger user interaction (> 0.1s threshold)
+                  onPlayheadChange(position + epsilon);
+                  // Reset to actual position after a small delay to ensure VideoPlayer processes the change
+                  setTimeout(() => {
+                    onPlayheadChange(position);
+                  }, 50); // Small delay to ensure VideoPlayer sees the intermediate change
+                }
+              }}
               totalDuration={totalDuration}
             />
 
@@ -733,7 +775,7 @@ const Timeline: React.FC<TimelineProps> = ({
             {/* Clips container */}
             <div
               ref={clipsContainerRef}
-              className="timeline-clips-container"
+              className="relative pt-1.5 overflow-visible -mt-[46px]"
               style={{
                 position: 'relative',
                 minHeight: '110px', // Fixed height: 80px clip + 30px for filename/padding
@@ -754,7 +796,7 @@ const Timeline: React.FC<TimelineProps> = ({
                     pointerEvents: 'none',
                   }}
                 >
-                  <div className="timeline-drop-indicator" />
+                  <div className="absolute left-[-1px] top-0 bottom-0 w-0.5 bg-[#0066cc] z-[5]" />
                 </div>
               )}
 
@@ -822,7 +864,7 @@ const Timeline: React.FC<TimelineProps> = ({
                         }}
                       >
                         {(isDraggingFromLibrary && libraryInsertIndex === index) && (
-                          <div className="timeline-drop-indicator" />
+                          <div className="absolute left-[-1px] top-0 bottom-0 w-0.5 bg-[#0066cc] z-[5]" />
                         )}
                       </div>
                     )}
@@ -843,14 +885,14 @@ const Timeline: React.FC<TimelineProps> = ({
                       }}
                     >
                       {dragOverIndex === index && isReordering && draggedClipIndex !== index && (
-                        <div className="timeline-drop-indicator" />
+                        <div className="absolute left-[-1px] top-0 bottom-0 w-0.5 bg-[#0066cc] z-[5]" />
                       )}
                       <TimelineClipCard
                         clip={clip}
                         libraryClip={libraryClip}
                         zoom={timelineZoom}
                         isSelected={selectedClipId === clip.id}
-                        onClick={() => onSelectClip(clip.id)}
+                        onClick={() => handleSelectClip(clip.id)}
                         onDragStart={handleClipDragStart}
                         onDelete={() => onDeleteClip(clip.id)}
                         clipIndex={index}
@@ -903,7 +945,7 @@ const Timeline: React.FC<TimelineProps> = ({
                               pointerEvents: 'none',
                             }}
                           >
-                            <div className="timeline-drop-indicator" />
+                            <div className="absolute left-[-1px] top-0 bottom-0 w-0.5 bg-[#0066cc] z-[5]" />
                           </div>
                         )}
                       </>
@@ -925,30 +967,19 @@ const Timeline: React.FC<TimelineProps> = ({
                     pointerEvents: 'none',
                   }}
                 >
-                  <div className="timeline-drop-indicator" />
+                  <div className="absolute left-[-1px] top-0 bottom-0 w-0.5 bg-[#0066cc] z-[5]" />
                 </div>
               )}
 
               {/* Empty state */}
               {timeline.length === 0 && (
-                <div className="timeline-empty-state">
-                  <p>Drag video files here or click to import</p>
+                <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 text-center">
+                  <p className="text-[#999999] text-sm">Drag clips from Library to timeline</p>
                 </div>
               )}
             </div>
           </div>
         </div>
-      </div>
-
-      {/* Zoom controls */}
-      <div className="timeline-footer">
-        <TimelineZoomControls
-          zoom={timelineZoom}
-          onZoomChange={onZoomChange}
-          timeline={timeline}
-          library={library}
-          timelineContainerRef={timelineContainerRef as React.RefObject<HTMLDivElement>}
-        />
       </div>
 
       {/* Trim Tooltip */}
