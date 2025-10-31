@@ -123,7 +123,7 @@ const Playhead: React.FC<PlayheadProps> = ({
       style={{
         position: 'absolute',
         left: `${xPosition}px`,
-        top: '-40px', // Extend up into the ruler area (40px ruler height)
+        top: '0px', // Start at top of timeline container
         bottom: 0,
         width: '12px', // Wider hit area for easier grabbing
         marginLeft: '-6px', // Center the hit area
@@ -143,7 +143,7 @@ const Playhead: React.FC<PlayheadProps> = ({
         e.stopPropagation();
       }}
     >
-      {/* White triangular arrowhead at top */}
+      {/* White triangular arrowhead at top - extends into ruler area */}
       <div
         style={{
           width: '0',
@@ -153,6 +153,7 @@ const Playhead: React.FC<PlayheadProps> = ({
           borderTop: '8px solid #ffffff',
           zIndex: 1001,
           boxShadow: '0 0 4px rgba(255, 255, 255, 0.6)',
+          marginTop: '-40px', // Extend upward into ruler area
         }}
       />
       
@@ -163,6 +164,7 @@ const Playhead: React.FC<PlayheadProps> = ({
           height: '40px', // Height of ruler area
           background: '#ffffff',
           boxShadow: '0 0 4px rgba(255, 255, 255, 0.6)',
+          marginTop: '-40px', // Position in ruler area
         }}
       />
       

@@ -5,7 +5,7 @@
  */
 
 import { TimelineClip } from '../types/video';
-import { TimelineDoc, Track, Lane, createMainTrack, createEmptyTimelineDoc } from '../types/timeline';
+import { TimelineDoc, Track, Lane, createMainTrack, createEmptyTimelineDoc, createOverlayTrack } from '../types/timeline';
 import { migrateToMagneticTimeline } from './magneticTimelineOperations';
 
 /**

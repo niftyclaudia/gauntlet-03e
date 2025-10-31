@@ -258,13 +258,17 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
 
   return (
     <div
-      className={`bg-[#1a1a1a] rounded px-1 py-1 cursor-move transition-all z-[50] border-2 border-transparent select-none pointer-events-auto relative ${
+      className={`bg-[#1a1a1a] cursor-move transition-all z-[50] border-2 border-transparent select-none pointer-events-auto relative ${
         isSelected ? 'border-[#0066cc] shadow-[0_0_0_2px_rgba(0,102,204,0.3)]' : ''
       } ${hasTrimHandleActive ? 'z-[100]' : ''} ${isDragging ? '' : ''} hover:border-[#666666]`}
       style={{
         width: `${clipWidth}px`,
         minWidth: '50px',
         opacity: isDragging ? 0.7 : 1,
+        height: `${BASE_CLIP_HEIGHT}px`, // Match track height exactly - 80px
+        padding: 0, // No padding to fill full height
+        margin: 0, // No margin
+        boxSizing: 'border-box', // Include border in height calculation so total height stays 80px
       }}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
@@ -273,9 +277,11 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
       onDragEnd={handleDragEnd}
     >
       <div 
-        className="relative w-full rounded-sm overflow-hidden bg-[#1a1a1a] group"
+        className="relative w-full h-full overflow-hidden bg-[#1a1a1a] group"
         style={{
-          height: `${BASE_CLIP_HEIGHT}px`,
+          height: '100%', // Fill full height of parent (accounts for border-box)
+          margin: 0,
+          padding: 0,
         }}
       >
         {thumbnailDataUrl ? (
@@ -292,7 +298,8 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
         ) : (
           <div className="w-full h-full flex items-center justify-center text-[#666666] text-[11px]">Loading...</div>
         )}
-        <div className="absolute bottom-1 right-1 bg-[rgba(0,0,0,0.75)] text-white text-[10px] font-medium px-1 py-0.5 rounded">
+        {/* Duration badge - bottom-left corner */}
+        <div className="absolute bottom-1 left-1 bg-[rgba(0,0,0,0.75)] text-white text-[10px] font-medium px-1 py-0.5 rounded">
           {durationDisplay}
         </div>
         {/* Delete button - appears on hover or when selected */}

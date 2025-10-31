@@ -31,7 +31,7 @@ import {
   validateGaplessInvariant,
 } from './utils/magneticTimelineOperations';
 import { TimelineDoc, createEmptyTimelineDoc } from './types/timeline';
-import { migrateToMultitrack, extractMainTrackClips, needsMultitrackMigration } from './utils/multitrackMigration';
+import { migrateToMultitrack, extractMainTrackClips, needsMultitrackMigration, addOverlayTrack } from './utils/multitrackMigration';
 import {
   addClipToMainTrackMagnetic,
   removeClipFromMainTrackMagnetic,
@@ -39,6 +39,7 @@ import {
   trimClipInMainTrackMagnetic,
   splitClipInMainTrackMagnetic,
 } from './utils/multitrackMagneticOperations';
+import { addClipToOverlay } from './utils/overlayTimelineOperations';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useSessionRestore } from './hooks/useSessionRestore';
 import { useFileImport } from './hooks/useFileImport';
@@ -64,6 +65,7 @@ const App: React.FC = () => {
   // Timeline state
   const [timeline, setTimeline] = useState<TimelineClip[]>([]);
   const [timelineDoc, setTimelineDoc] = useState<TimelineDoc | undefined>(undefined);
+  const [activeTrackId, setActiveTrackId] = useState<string | null>(null); // Track where new clips will be added
   const [timelineZoom, setTimelineZoom] = useState<number>(1.0);
   const [timelineScrollPosition, setTimelineScrollPosition] = useState<number>(0);
   const [currentPlayheadPosition, setCurrentPlayheadPosition] = useState<number>(0);
@@ -76,11 +78,26 @@ const App: React.FC = () => {
     if (timeline.length > 0 && !timelineDoc) {
       const doc = migrateToMultitrack(timeline);
       setTimelineDoc(doc);
+      // Set main track as active by default
+      if (doc.tracks.length > 0 && doc.tracks[0].role === 'main') {
+        setActiveTrackId(doc.tracks[0].id);
+      }
     } else if (timeline.length === 0 && timelineDoc && extractMainTrackClips(timelineDoc).length > 0) {
       // Clear timelineDoc if timeline becomes empty
       setTimelineDoc(createEmptyTimelineDoc());
     }
   }, []); // Only run on mount
+
+  // Initialize active track when timelineDoc is created
+  useEffect(() => {
+    if (timelineDoc && !activeTrackId && timelineDoc.tracks.length > 0) {
+      // Set main track as active by default
+      const mainTrack = timelineDoc.tracks.find(t => t.role === 'main');
+      if (mainTrack) {
+        setActiveTrackId(mainTrack.id);
+      }
+    }
+  }, [timelineDoc, activeTrackId]);
   
   // Sync timeline array from timelineDoc main track (for backward compatibility)
   useEffect(() => {
@@ -156,17 +173,82 @@ const App: React.FC = () => {
    */
   const handleAddClipToTimeline = (libraryClipId: string, insertionIndex?: number) => {
     setTimelineDoc(prevDoc => {
-      const updatedDoc = addClipToMainTrackMagnetic(
-        libraryClipId,
-        prevDoc,
-        timeline,
-        library,
-        insertionIndex,
-        'ripple'
-      );
+      if (!prevDoc) {
+        const newDoc = migrateToMultitrack(timeline);
+        const mainTrack = newDoc.tracks.find(t => t.role === 'main');
+        if (mainTrack) {
+          setActiveTrackId(mainTrack.id);
+        }
+        // Add clip to the newly created doc
+        if (mainTrack && mainTrack.isMagnetic) {
+          return addClipToMainTrackMagnetic(
+            libraryClipId,
+            newDoc,
+            timeline,
+            library,
+            insertionIndex,
+            'ripple'
+          );
+        }
+        return newDoc;
+      }
+
+      // Find active track
+      const activeTrack = prevDoc.tracks.find(t => t.id === activeTrackId);
       
-      console.log(`[App] Added clip ${libraryClipId} to main track at index ${insertionIndex ?? timeline.length}`);
-      return updatedDoc;
+      if (!activeTrack) {
+        // Fallback to main track if no active track
+        const mainTrack = prevDoc.tracks.find(t => t.role === 'main');
+        if (mainTrack) {
+          const updatedDoc = addClipToMainTrackMagnetic(
+            libraryClipId,
+            prevDoc,
+            timeline,
+            library,
+            insertionIndex,
+            'ripple'
+          );
+          console.log(`[App] Added clip ${libraryClipId} to main track (fallback) at index ${insertionIndex ?? timeline.length}`);
+          return updatedDoc;
+        }
+        return prevDoc;
+      }
+
+      // Add to main track (magnetic)
+      if (activeTrack.role === 'main' && activeTrack.isMagnetic) {
+        const updatedDoc = addClipToMainTrackMagnetic(
+          libraryClipId,
+          prevDoc,
+          timeline,
+          library,
+          insertionIndex,
+          'ripple'
+        );
+        console.log(`[App] Added clip ${libraryClipId} to main track at index ${insertionIndex ?? timeline.length}`);
+        return updatedDoc;
+      }
+
+      // Add to overlay track (freeform, at playhead position)
+      if (activeTrack.role === 'overlay' && !activeTrack.isMagnetic) {
+        const laneId = activeTrack.lanes[0]?.id;
+        if (!laneId) {
+          console.warn(`[App] Overlay track ${activeTrack.id} has no lanes`);
+          return prevDoc;
+        }
+        
+        const updatedDoc = addClipToOverlay(
+          libraryClipId,
+          prevDoc,
+          library,
+          activeTrack.id,
+          laneId,
+          currentPlayheadPosition // Place at current playhead
+        );
+        console.log(`[App] Added clip ${libraryClipId} to overlay track ${activeTrack.id} at time ${currentPlayheadPosition.toFixed(2)}s`);
+        return updatedDoc;
+      }
+
+      return prevDoc;
     });
   };
 
@@ -274,6 +356,37 @@ const App: React.FC = () => {
       console.log(`[App] Updated trim for clip ${clipId}: trimStart=${trimStart.toFixed(2)}s, trimEnd=${trimEnd.toFixed(2)}s`);
       return updatedDoc;
     });
+  };
+
+  /**
+   * Handle creating a new overlay track
+   */
+  const handleCreateOverlayTrack = () => {
+    setTimelineDoc(prevDoc => {
+      if (!prevDoc) {
+        const newDoc = migrateToMultitrack(timeline);
+        const updatedDoc = addOverlayTrack(newDoc);
+        // Set new track as active
+        const newTrack = updatedDoc.tracks[updatedDoc.tracks.length - 1];
+        setActiveTrackId(newTrack.id);
+        return updatedDoc;
+      }
+      
+      const updatedDoc = addOverlayTrack(prevDoc);
+      // Set new track as active
+      const newTrack = updatedDoc.tracks[updatedDoc.tracks.length - 1];
+      setActiveTrackId(newTrack.id);
+      console.log(`[App] Created new overlay track: ${newTrack.id}`);
+      return updatedDoc;
+    });
+  };
+
+  /**
+   * Handle selecting an active track (where new clips will be added)
+   */
+  const handleSelectTrack = (trackId: string | null) => {
+    setActiveTrackId(trackId);
+    console.log(`[App] Selected track: ${trackId}`);
   };
 
   /**
@@ -889,11 +1002,13 @@ const App: React.FC = () => {
       <div ref={timelineRef} className="flex flex-col overflow-hidden" style={{ height: '50%' }}>
         <Timeline
           timeline={timeline}
+          timelineDoc={timelineDoc}
           library={library}
           selectedClipId={selectedClipId}
           currentPlayheadPosition={currentPlayheadPosition}
           timelineZoom={timelineZoom}
           timelineScrollPosition={timelineScrollPosition}
+          activeTrackId={activeTrackId}
           onAddClip={handleAddClipToTimeline}
           onReorderClip={handleReorderClip}
           onSelectClip={handleTimelineSelectClip}
@@ -904,6 +1019,8 @@ const App: React.FC = () => {
           onPlayheadChange={setCurrentPlayheadPosition}
           onTrimUpdate={handleTrimUpdate}
           onSplitClip={handleSplitClip}
+          onCreateOverlayTrack={handleCreateOverlayTrack}
+          onSelectTrack={handleSelectTrack}
           isPlayheadOverClip={isPlayheadOverClip()}
           timelineContainerRefCallback={(ref) => { timelineContainerRef.current = ref.current; }}
         />
