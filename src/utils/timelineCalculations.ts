@@ -26,6 +26,9 @@ export function applyClipWidthConstraints(width: number): number {
 /**
  * Calculate the pixel position (X coordinate) of a clip on the timeline
  * 
+ * Updated to use time-based positioning (start time) when available for magnetic timeline.
+ * Falls back to cumulative width calculation for backward compatibility.
+ * 
  * @param clipIndex - Index of the clip in the timeline array
  * @param timeline - Array of timeline clips
  * @param library - Array of library clips
@@ -42,6 +45,14 @@ export function calculateClipPosition(
     return 0;
   }
 
+  const clip = timeline[clipIndex];
+  
+  // Use time-based positioning if start time is available (magnetic timeline)
+  if (clip.start !== undefined) {
+    return clip.start * zoom * BASE_PIXELS_PER_SECOND;
+  }
+
+  // Fallback to cumulative width calculation for backward compatibility
   let position = 0;
 
   // Sum up widths of all clips before this one

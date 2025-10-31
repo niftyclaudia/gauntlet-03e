@@ -9,7 +9,8 @@ import {
   SavedProjectState, 
   VideoClip, 
   TimelineClip, 
-  PROJECT_VERSION 
+  PROJECT_VERSION,
+  LEGACY_PROJECT_VERSION,
 } from '../types/video';
 
 /**
@@ -64,10 +65,15 @@ export function deserializeProjectState(
     return null;
   }
 
-  // Validate version
-  if (savedState.version !== PROJECT_VERSION) {
-    console.error(`[ProjectState] Version mismatch: expected ${PROJECT_VERSION}, got ${savedState.version}`);
+  // Validate version (accept both current and legacy versions for migration)
+  const version = savedState.version || LEGACY_PROJECT_VERSION;
+  if (version !== PROJECT_VERSION && version !== LEGACY_PROJECT_VERSION) {
+    console.error(`[ProjectState] Unsupported version: ${version}. Expected ${PROJECT_VERSION} or ${LEGACY_PROJECT_VERSION}`);
     return null;
+  }
+  
+  if (version === LEGACY_PROJECT_VERSION) {
+    console.log(`[ProjectState] Loading legacy project (version ${LEGACY_PROJECT_VERSION}). Will migrate to magnetic timeline format.`);
   }
 
   // Validate required fields

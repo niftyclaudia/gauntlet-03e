@@ -21,7 +21,15 @@ import WebcamRecordingModal from './components/WebcamRecordingModal';
 import RecordingTypeModal from './components/RecordingTypeModal';
 import PiPRecordingModal from './components/PiPRecordingModal';
 import { VideoClip, TimelineClip } from './types/video';
-import { addClipToTimeline, reorderTimelineClip, removeClipFromTimeline, splitClipAtPlayhead } from './utils/timelineOperations';
+import {
+  addClipToTimelineMagnetic,
+  reorderTimelineClipMagnetic,
+  removeClipFromTimelineMagnetic,
+  splitClipAtPlayheadMagnetic,
+  trimClipMagnetic,
+  migrateToMagneticTimeline,
+  validateGaplessInvariant,
+} from './utils/magneticTimelineOperations';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useSessionRestore } from './hooks/useSessionRestore';
 import { useFileImport } from './hooks/useFileImport';
@@ -101,22 +109,40 @@ const App: React.FC = () => {
   };
 
   /**
-   * Handle adding clip from Library to Timeline
+   * Handle adding clip from Library to Timeline (with ripple insert)
    */
   const handleAddClipToTimeline = (libraryClipId: string, insertionIndex?: number) => {
     setTimeline(prev => {
-      const newTimeline = addClipToTimeline(libraryClipId, prev, library, insertionIndex);
+      const migrated = migrateToMagneticTimeline(prev);
+      const newTimeline = addClipToTimelineMagnetic(libraryClipId, migrated, library, insertionIndex, 'ripple');
+      
+      // Validate invariant in development
+      if (process.env.NODE_ENV === 'development') {
+        if (!validateGaplessInvariant(newTimeline)) {
+          console.error('[App] Gapless invariant violated after addClip');
+        }
+      }
+      
       console.log(`[App] Added clip ${libraryClipId} to timeline at index ${insertionIndex ?? prev.length}. Timeline now has ${newTimeline.length} clip(s).`);
       return newTimeline;
     });
   };
 
   /**
-   * Handle reordering clip on timeline
+   * Handle reordering clip on timeline (with ripple move)
    */
   const handleReorderClip = (dragIndex: number, hoverIndex: number) => {
     setTimeline(prev => {
-      const newTimeline = reorderTimelineClip(dragIndex, hoverIndex, prev);
+      const migrated = migrateToMagneticTimeline(prev);
+      const newTimeline = reorderTimelineClipMagnetic(dragIndex, hoverIndex, migrated);
+      
+      // Validate invariant in development
+      if (process.env.NODE_ENV === 'development') {
+        if (!validateGaplessInvariant(newTimeline)) {
+          console.error('[App] Gapless invariant violated after reorder');
+        }
+      }
+      
       console.log(`[App] Reordered clip from index ${dragIndex} to ${hoverIndex}`);
       return newTimeline;
     });
@@ -136,11 +162,20 @@ const App: React.FC = () => {
   }, [selectedClipId]);
 
   /**
-   * Handle deleting clip from timeline
+   * Handle deleting clip from timeline (with ripple delete)
    */
   const handleDeleteClip = (clipId: string) => {
     setTimeline(prev => {
-      const newTimeline = removeClipFromTimeline(clipId, prev);
+      const migrated = migrateToMagneticTimeline(prev);
+      const newTimeline = removeClipFromTimelineMagnetic(clipId, migrated);
+      
+      // Validate invariant in development
+      if (process.env.NODE_ENV === 'development') {
+        if (!validateGaplessInvariant(newTimeline)) {
+          console.error('[App] Gapless invariant violated after delete');
+        }
+      }
+      
       // Clear selection if deleted clip was selected
       if (selectedClipId === clipId) {
         setSelectedClipId(null);
@@ -163,7 +198,8 @@ const App: React.FC = () => {
 
     // Also remove from timeline if it's being used there
     setTimeline(prev => {
-      const newTimeline = removeClipFromTimeline(clipId, prev);
+      const migrated = migrateToMagneticTimeline(prev);
+      const newTimeline = removeClipFromTimelineMagnetic(clipId, migrated);
       if (newTimeline.length !== prev.length) {
         console.log(`[App] Also removed clip ${clipId} from timeline. Timeline now has ${newTimeline.length} clip(s).`);
       }
@@ -187,26 +223,27 @@ const App: React.FC = () => {
   };
 
   /**
-   * Handle trim update - called after trim operation completes via IPC
+   * Handle trim update with ripple behavior
    */
   const handleTrimUpdate = (clipId: string, trimStart: number, trimEnd: number) => {
     setTimeline(prev => {
-      return prev.map(clip => {
-        if (clip.id === clipId) {
-          console.log(`[App] Updated trim for clip ${clipId}: trimStart=${trimStart.toFixed(2)}s, trimEnd=${trimEnd.toFixed(2)}s`);
-          return {
-            ...clip,
-            trimStart,
-            trimEnd,
-          };
+      const migrated = migrateToMagneticTimeline(prev);
+      const newTimeline = trimClipMagnetic(clipId, trimStart, trimEnd, migrated, library, 'ripple');
+      
+      // Validate invariant in development
+      if (process.env.NODE_ENV === 'development') {
+        if (!validateGaplessInvariant(newTimeline)) {
+          console.error('[App] Gapless invariant violated after trim');
         }
-        return clip;
-      });
+      }
+      
+      console.log(`[App] Updated trim for clip ${clipId}: trimStart=${trimStart.toFixed(2)}s, trimEnd=${trimEnd.toFixed(2)}s`);
+      return newTimeline;
     });
   };
 
   /**
-   * Handle splitting a clip at the current playhead position
+   * Handle splitting a clip at the current playhead position (with magnetic behavior)
    */
   const handleSplitClip = () => {
     const clipToSplit = getClipAtPlayhead();
@@ -216,7 +253,16 @@ const App: React.FC = () => {
     }
 
     setTimeline(prev => {
-      const newTimeline = splitClipAtPlayhead(clipToSplit.id, currentPlayheadPosition, prev, library);
+      const migrated = migrateToMagneticTimeline(prev);
+      const newTimeline = splitClipAtPlayheadMagnetic(clipToSplit.id, currentPlayheadPosition, migrated, library);
+      
+      // Validate invariant in development
+      if (process.env.NODE_ENV === 'development') {
+        if (!validateGaplessInvariant(newTimeline)) {
+          console.error('[App] Gapless invariant violated after split');
+        }
+      }
+      
       if (newTimeline.length > prev.length) {
         console.log(`[App] Split clip ${clipToSplit.id} at ${currentPlayheadPosition.toFixed(2)}s. Timeline now has ${newTimeline.length} clip(s).`);
       }
@@ -226,10 +272,9 @@ const App: React.FC = () => {
 
   /**
    * Get the clip that the playhead is currently over (for splitting)
+   * Uses time-based positioning when available (magnetic timeline)
    */
   const getClipAtPlayhead = (): TimelineClip | null => {
-    let currentTime = 0;
-    
     // Sort timeline by order to ensure correct calculation
     const sortedTimeline = [...timeline].sort((a, b) => a.order - b.order);
     
@@ -237,15 +282,30 @@ const App: React.FC = () => {
       const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
       if (!libraryClip) continue;
       
-      const clipStartTime = currentTime;
-      const clipEndTime = currentTime + (clip.trimEnd - clip.trimStart);
+      // Use start property if available (magnetic timeline), otherwise calculate cumulative
+      let clipStartTime: number;
+      if (clip.start !== undefined) {
+        clipStartTime = clip.start;
+      } else {
+        // Fallback: calculate cumulative time (backward compatibility)
+        let currentTime = 0;
+        for (const prevClip of sortedTimeline) {
+          if (prevClip.id === clip.id) break;
+          const prevLibraryClip = library.find(lc => lc.id === prevClip.libraryClipId);
+          if (prevLibraryClip) {
+            currentTime += prevClip.trimEnd - prevClip.trimStart;
+          }
+        }
+        clipStartTime = currentTime;
+      }
+      
+      const clipDuration = clip.trimEnd - clip.trimStart;
+      const clipEndTime = clipStartTime + clipDuration;
       
       // Check if playhead is within this clip's timeline position
       if (currentPlayheadPosition >= clipStartTime && currentPlayheadPosition <= clipEndTime) {
         return clip;
       }
-      
-      currentTime = clipEndTime;
     }
     
     return null;

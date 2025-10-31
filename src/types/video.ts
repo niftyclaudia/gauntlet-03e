@@ -59,6 +59,8 @@ export interface TimelineClip {
   trimEnd: number;
   /** Sequence position (0, 1, 2, ...) */
   order: number;
+  /** Absolute start time in timeline (seconds) - required for magnetic timeline, optional for backward compatibility */
+  start?: number;
 }
 
 /**
@@ -146,8 +148,15 @@ export interface SavedProjectState {
 
 /**
  * Project version constant for auto-save compatibility
+ * - "1.0": Pre-magnetic timeline (no start property)
+ * - "2.0": Magnetic timeline (with start property, gapless invariant)
  */
-export const PROJECT_VERSION = '1.0';
+export const PROJECT_VERSION = '2.0';
+
+/**
+ * Legacy project version (pre-magnetic)
+ */
+export const LEGACY_PROJECT_VERSION = '1.0';
 
 /**
  * Export settings (fixed preset per PRD)
