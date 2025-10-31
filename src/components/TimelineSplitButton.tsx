@@ -55,15 +55,19 @@ const TimelineSplitButton: React.FC<TimelineSplitButtonProps> = ({
 
   return (
     <button
-      className={`timeline-split-button ${enabled ? 'enabled' : 'disabled'} ${isClicked ? 'clicked' : ''} ${showSuccess ? 'success' : ''} ${className}`}
+      className={`flex items-center gap-1 rounded px-2.5 py-1.5 text-xs font-medium cursor-pointer transition-all relative overflow-hidden ${
+        enabled 
+          ? 'bg-transparent border border-[#444444] text-[#cccccc] hover:bg-[#2a2a2a] hover:border-[#555555]' 
+          : 'bg-transparent border border-[#333333] text-[#666666] cursor-not-allowed opacity-60'
+      } ${isClicked ? 'bg-[#2a2a2a] scale-95' : ''} ${showSuccess ? 'bg-[#2a2a2a] border-[#4caf50] text-[#4caf50] animate-[successPulse_0.6s_ease-out]' : ''}`}
       onClick={handleClick}
       disabled={!enabled}
       title={enabled ? 'Split clip at playhead (Cmd/Ctrl+Shift+X)' : 'Position playhead over a clip to split'}
     >
-      <span className="split-button-icon">
+      <span className="text-sm">
         {showSuccess ? '✓' : '✂️'}
       </span>
-      <span className="split-button-text">
+      <span className="font-medium text-xs">
         {showSuccess ? 'Split!' : 'Split'}
       </span>
     </button>

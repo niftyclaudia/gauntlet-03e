@@ -57,8 +57,14 @@ export interface TimelineClip {
   trimStart: number;
   /** Trim end time in seconds (default: clip duration) */
   trimEnd: number;
-  /** Sequence position (0, 1, 2, ...) */
+  /** Sequence position (0, 1, 2, ...) - for main track ordering */
   order: number;
+  /** Absolute start time in timeline (seconds) - required for magnetic timeline, optional for backward compatibility */
+  start?: number;
+  /** Track ID this clip belongs to (for multitrack) */
+  trackId?: string;
+  /** Lane ID within track (for multitrack) */
+  laneId?: string;
 }
 
 /**
@@ -67,8 +73,10 @@ export interface TimelineClip {
 export interface AppState {
   /** Array of imported video clips */
   library: VideoClip[];
-  /** Timeline clips */
+  /** Timeline clips (legacy - kept for backward compatibility) */
   timeline: TimelineClip[];
+  /** Timeline document (multitrack structure - new) */
+  timelineDoc?: import('./timeline').TimelineDoc;
   /** Currently selected clip ID */
   selectedClipId: string | null;
   /** Current playhead position in seconds */
@@ -146,8 +154,15 @@ export interface SavedProjectState {
 
 /**
  * Project version constant for auto-save compatibility
+ * - "1.0": Pre-magnetic timeline (no start property)
+ * - "2.0": Magnetic timeline (with start property, gapless invariant)
  */
-export const PROJECT_VERSION = '1.0';
+export const PROJECT_VERSION = '2.0';
+
+/**
+ * Legacy project version (pre-magnetic)
+ */
+export const LEGACY_PROJECT_VERSION = '1.0';
 
 /**
  * Export settings (fixed preset per PRD)
@@ -177,14 +192,16 @@ export interface ExportSettings {
  * Export parameters for video export pipeline
  */
 export interface ExportParams {
-  /** Timeline clips to export (sorted by order) */
-  clips: TimelineClip[];
+  /** Timeline clips to export (sorted by order) - deprecated, use timelineDoc instead */
+  clips?: TimelineClip[];
   /** Library clips map (for accessing source file paths) */
   libraryClips: VideoClip[];
   /** Output file path (absolute path) */
   outputPath: string;
   /** Export settings (fixed preset) */
   settings: ExportSettings;
+  /** Timeline document with multitrack structure (includes overlay tracks) */
+  timelineDoc?: import('./timeline').TimelineDoc;
 }
 
 /**

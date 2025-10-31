@@ -164,6 +164,8 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
 
     let currentInPoint: number;
     let currentOutPoint: number;
+    let validatedInPoint: number = dragging.initialInPoint;
+    let validatedOutPoint: number = dragging.initialOutPoint;
 
     if (dragging.edge === 'left') {
       // Dragging left handle: update trimStart
@@ -174,7 +176,7 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
         newInPoint = snapToGrid(newInPoint, '1sec', framerate);
       }
       
-      const validatedInPoint = validateTrimStart(
+      validatedInPoint = validateTrimStart(
         newInPoint,
         dragging.initialOutPoint, // Use initial outPoint (not dragged)
         clipDuration
@@ -182,6 +184,7 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
       setDraggedInPoint(validatedInPoint);
       // Keep outPoint unchanged when dragging left handle (set to initial)
       setDraggedOutPoint(null);
+      validatedOutPoint = dragging.initialOutPoint; // Keep original outPoint
       
       currentInPoint = validatedInPoint;
       currentOutPoint = dragging.initialOutPoint;
@@ -194,7 +197,7 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
         newOutPoint = snapToGrid(newOutPoint, '1sec', framerate);
       }
       
-      const validatedOutPoint = validateTrimEnd(
+      validatedOutPoint = validateTrimEnd(
         dragging.initialInPoint, // Use initial inPoint (not dragged)
         newOutPoint,
         clipDuration
@@ -202,6 +205,7 @@ export function useTrimDrag(zoom: number): UseTrimDragReturn {
       setDraggedOutPoint(validatedOutPoint);
       // Keep inPoint unchanged when dragging right handle (set to null)
       setDraggedInPoint(null);
+      validatedInPoint = dragging.initialInPoint; // Keep original inPoint
       
       currentInPoint = dragging.initialInPoint;
       currentOutPoint = validatedOutPoint;

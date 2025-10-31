@@ -17,13 +17,16 @@ interface CutLineProps {
   timelineHeight?: number;
   /** CSS class name for styling */
   className?: string;
+  /** Additional inline styles */
+  style?: React.CSSProperties;
 }
 
 const CutLine: React.FC<CutLineProps> = ({
   position,
   visible,
   timelineHeight = 110,
-  className = ''
+  className = '',
+  style = {}
 }) => {
   if (!visible) {
     return null;
@@ -43,6 +46,7 @@ const CutLine: React.FC<CutLineProps> = ({
         pointerEvents: 'none',
         boxShadow: '0 0 8px rgba(255, 107, 107, 0.6)',
         animation: 'cutLinePulse 1.5s infinite ease-in-out',
+        ...style, // Allow override via style prop
       }}
     />
   );

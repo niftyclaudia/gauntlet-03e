@@ -72,17 +72,21 @@ const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect, isSel
 
   return (
     <div 
-      className={`library-clip-card ${isSelected ? 'selected' : ''}`}
+      className={`relative bg-[#2a2a2a] rounded-lg p-2 cursor-pointer transition-all border-2 group ${
+        isSelected 
+          ? 'border-[#0066cc] bg-[#1e3a5f] hover:border-[#0080ff] hover:bg-[#1e4a6f]' 
+          : 'border-transparent hover:border-[#0066cc] hover:-translate-y-0.5'
+      }`}
       onClick={handleClick}
       draggable
       onDragStart={handleDragStart}
       onDragEnd={handleDragEnd}
-      title={clip.filename} // Show full filename on hover
+      title={clip.filename}
     >
       {/* Delete button */}
       {onDelete && (
         <button
-          className="library-clip-delete-button"
+          className="absolute top-1 right-1 w-5 h-5 border-none rounded-full bg-[rgba(255,107,107,0.9)] text-white text-sm font-bold cursor-pointer flex items-center justify-center opacity-0 transition-all z-10 hover:bg-[rgba(255,107,107,1)] hover:scale-110 group-hover:opacity-100"
           onClick={handleDelete}
           aria-label="Delete clip"
           title="Delete clip from library"
@@ -91,21 +95,21 @@ const LibraryClipCard: React.FC<LibraryClipCardProps> = ({ clip, onSelect, isSel
         </button>
       )}
       
-      <div className="clip-thumbnail-container">
+      <div className="relative w-full aspect-video rounded overflow-hidden bg-[#1a1a1a]">
         {thumbnailDataUrl ? (
           <img 
             src={thumbnailDataUrl}
             alt={clip.filename}
-            className="clip-thumbnail"
+            className="w-full h-full object-cover"
           />
         ) : (
-          <div className="clip-thumbnail-placeholder">Loading...</div>
+          <div className="w-full h-full flex items-center justify-center text-[#666666] text-xs">Loading...</div>
         )}
-        <div className="clip-duration-overlay">
+        <div className="absolute bottom-1 right-1 bg-[rgba(0,0,0,0.75)] text-white text-[11px] font-medium px-1.5 py-0.5 rounded">
           {durationDisplay}
         </div>
       </div>
-      <div className="clip-filename">
+      <div className="mt-1.5 text-xs text-white whitespace-nowrap overflow-hidden text-ellipsis">
         {displayFilename}
       </div>
     </div>

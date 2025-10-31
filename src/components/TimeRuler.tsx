@@ -201,7 +201,7 @@ const TimeRuler: React.FC<TimeRulerProps> = ({
             </div>
           ))}
         
-        {/* Playhead indicator on ruler */}
+        {/* Playhead indicator on ruler - white */}
         <div
           className="time-ruler-playhead"
           style={{
@@ -210,22 +210,22 @@ const TimeRuler: React.FC<TimeRulerProps> = ({
             top: '0px',
             width: '2px',
             height: '40px',
-            background: 'linear-gradient(to bottom, #ff4757, #ff3838)',
-            boxShadow: '0 0 6px rgba(255, 71, 87, 0.6)',
+            background: '#ffffff',
+            boxShadow: '0 0 4px rgba(255, 255, 255, 0.6)',
             zIndex: 10,
             pointerEvents: 'none'
           }}
         />
         
-        {/* Time display floating near playhead (CapCut style) */}
+        {/* Time display floating near playhead */}
         <div
           className="time-ruler-playhead-time"
           style={{
             position: 'absolute',
             left: `${Math.max(6, Math.min(playheadX + 8, timelineWidth - 80))}px`,
             top: '-24px',
-            background: '#ff4757',
-            color: 'white',
+            background: '#ffffff',
+            color: '#1a1a1a',
             padding: '2px 6px',
             borderRadius: '4px',
             fontSize: '10px',

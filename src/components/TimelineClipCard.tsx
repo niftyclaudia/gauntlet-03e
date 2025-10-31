@@ -21,7 +21,7 @@ interface TimelineClipCardProps {
   /** Callback when clip is clicked */
   onClick: () => void;
   /** Callback when drag starts */
-  onDragStart: (e: React.DragEvent, clipIndex: number) => void;
+  onDragStart: (e: React.DragEvent, clipIndex: number, trackId?: string, clipId?: string) => void;
   /** Callback when clip is deleted */
   onDelete: () => void;
   /** Clip index in timeline */
@@ -93,6 +93,11 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
 
     loadThumbnail();
   }, [libraryClip.thumbnail]);
+
+  // Log when selection state changes
+  useEffect(() => {
+    console.log(`[TimelineClipCard] Clip ${clip.id} (${libraryClip.filename}) selection changed: isSelected=${isSelected}`);
+  }, [isSelected, clip.id, libraryClip.filename]);
 
   // Use dragged trim values during drag, with fixed values as fallback
   // When dragging left handle: draggedInPoint changes, fixedOutPoint is used for right edge
@@ -166,7 +171,7 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
     e.dataTransfer.effectAllowed = 'move';
     // Prevent click from firing
     e.stopPropagation();
-    onDragStart(e, clipIndex);
+    onDragStart(e, clipIndex, clip.trackId, clip.id);
   };
 
   const handleDragEnd = () => {
@@ -253,11 +258,17 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
 
   return (
     <div
-      className={`timeline-clip-card ${isSelected ? 'timeline-clip-selected' : ''} ${hasTrimHandleActive ? 'timeline-clip-trimming' : ''} ${isDragging ? 'timeline-clip-dragging' : ''}`}
+      className={`bg-[#1a1a1a] cursor-move transition-all z-[50] border-2 border-transparent select-none pointer-events-auto relative ${
+        isSelected ? '' : ''
+      } ${hasTrimHandleActive ? 'z-[100]' : ''} ${isDragging ? '' : ''} hover:border-[#666666]`}
       style={{
         width: `${clipWidth}px`,
-        minWidth: '50px', // Minimum width for visibility
+        minWidth: '50px',
         opacity: isDragging ? 0.7 : 1,
+        height: '100%', // Fill full height of wrapper (which matches track height)
+        padding: 0, // No padding to fill full height
+        margin: 0, // No margin
+        boxSizing: 'border-box', // Include border in height calculation
       }}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
@@ -266,17 +277,17 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
       onDragEnd={handleDragEnd}
     >
       <div 
-        className="timeline-clip-thumbnail-container"
+        className="relative w-full h-full overflow-hidden bg-[#1a1a1a] group"
         style={{
-          height: `${BASE_CLIP_HEIGHT}px`, // Fixed height - only width scales with zoom
+          height: '100%', // Fill full height of parent (accounts for border-box)
+          margin: 0,
+          padding: 0,
         }}
       >
         {thumbnailDataUrl ? (
           <div
-            className="timeline-clip-thumbnail"
+            className="w-full h-full"
             style={{
-              width: '100%',
-              height: '100%',
               backgroundImage: `url(${thumbnailDataUrl})`,
               backgroundSize: `${THUMBNAIL_WIDTH}px 100%`,
               backgroundRepeat: 'repeat-x',
@@ -285,14 +296,15 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
             aria-label={libraryClip.filename}
           />
         ) : (
-          <div className="timeline-clip-thumbnail-placeholder">Loading...</div>
+          <div className="w-full h-full flex items-center justify-center text-[#666666] text-[11px]">Loading...</div>
         )}
-        <div className="timeline-clip-duration-overlay">
+        {/* Duration badge - bottom-left corner */}
+        <div className="absolute bottom-1 left-1 bg-[rgba(0,0,0,0.75)] text-white text-[10px] font-medium px-1 py-0.5 rounded">
           {durationDisplay}
         </div>
         {/* Delete button - appears on hover or when selected */}
         <button
-          className="timeline-clip-delete-button"
+          className="absolute top-1 right-1 w-5 h-5 bg-[rgba(220,53,69,0.9)] text-white border-none rounded-full cursor-pointer text-base font-bold leading-none flex items-center justify-center opacity-0 transition-all z-10 p-0 select-none hover:bg-[rgba(220,53,69,1)] hover:scale-110 active:scale-95 group-hover:opacity-100"
           onClick={handleDeleteClick}
           title="Delete clip"
           aria-label="Delete clip"
@@ -301,35 +313,41 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
         </button>
         {/* Trim handles */}
         <div
-          className={`timeline-clip-trim-handle timeline-clip-trim-handle-left ${
-            hoveredEdge === 'left' ? 'trim-handle-hovered' : ''
-          } ${isTrimming && hoveredEdge === 'left' ? 'trim-handle-dragging' : ''} ${
-            leftHandleAtMinimum ? 'trim-handle-at-minimum' : ''
-          }`}
+          className={`absolute top-0 bottom-0 w-1 bg-[rgba(0,102,204,0.5)] cursor-default opacity-0 transition-all z-[101] pointer-events-auto left-0 rounded-l-sm ${
+            hoveredEdge === 'left' ? 'opacity-100 w-1.5 bg-[rgba(0,102,204,0.8)] cursor-ew-resize' : ''
+          } ${isTrimming && hoveredEdge === 'left' ? 'opacity-100 w-1.5 bg-[rgba(0,102,204,1)] cursor-grabbing' : ''} ${
+            leftHandleAtMinimum ? 'bg-[rgba(255,107,107,0.8)] border border-[#ff6b6b] shadow-[0_0_4px_rgba(255,107,107,0.5)] hover:bg-[rgba(255,107,107,1)] hover:shadow-[0_0_6px_rgba(255,107,107,0.7)]' : ''
+          } group-hover:opacity-50`}
           onMouseDown={handleLeftTrimMouseDown}
           onMouseEnter={handleLeftTrimMouseEnter}
           onMouseLeave={handleTrimMouseLeave}
           onClick={handleLeftTrimClick}
           style={{
-            cursor: hoveredEdge === 'left' || (isTrimming && hoveredEdge === 'left') ? 'ew-resize' : 'default',
+            cursor: hoveredEdge === 'left' || isTrimming ? 'ew-resize' : 'default',
           }}
         />
         <div
-          className={`timeline-clip-trim-handle timeline-clip-trim-handle-right ${
-            hoveredEdge === 'right' ? 'trim-handle-hovered' : ''
-          } ${isTrimming && hoveredEdge === 'right' ? 'trim-handle-dragging' : ''} ${
-            rightHandleAtMinimum ? 'trim-handle-at-minimum' : ''
-          }`}
+          className={`absolute top-0 bottom-0 w-1 bg-[rgba(0,102,204,0.5)] cursor-default opacity-0 transition-all z-[101] pointer-events-auto right-0 rounded-r-sm ${
+            hoveredEdge === 'right' ? 'opacity-100 w-1.5 bg-[rgba(0,102,204,0.8)] cursor-ew-resize' : ''
+          } ${isTrimming && hoveredEdge === 'right' ? 'opacity-100 w-1.5 bg-[rgba(0,102,204,1)] cursor-grabbing' : ''} ${
+            rightHandleAtMinimum ? 'bg-[rgba(255,107,107,0.8)] border border-[#ff6b6b] shadow-[0_0_4px_rgba(255,107,107,0.5)] hover:bg-[rgba(255,107,107,1)] hover:shadow-[0_0_6px_rgba(255,107,107,0.7)]' : ''
+          } group-hover:opacity-50`}
           onMouseDown={handleRightTrimMouseDown}
           onMouseEnter={handleRightTrimMouseEnter}
           onMouseLeave={handleTrimMouseLeave}
           onClick={handleRightTrimClick}
           style={{
-            cursor: hoveredEdge === 'right' || (isTrimming && hoveredEdge === 'right') ? 'ew-resize' : 'default',
+            cursor: hoveredEdge === 'right' || isTrimming ? 'ew-resize' : 'default',
           }}
         />
       </div>
-      <div className="timeline-clip-filename">
+      {/* Filename overlay - positioned absolutely within clip bounds */}
+      <div 
+        className="absolute bottom-0 left-0 right-0 text-[11px] text-white whitespace-nowrap overflow-hidden text-ellipsis bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 pointer-events-none"
+        style={{
+          maxWidth: '100%',
+        }}
+      >
         {displayFilename}
       </div>
     </div>

@@ -5,7 +5,7 @@
  * Supports video import via drag-and-drop and file picker.
  */
 
-import React, { useState, DragEvent } from 'react';
+import React, { useState, DragEvent, forwardRef } from 'react';
 import { VideoClip } from '../types/video';
 import LibraryClipCard from './LibraryClipCard';
 import { useFileImport } from '../hooks/useFileImport';
@@ -24,13 +24,22 @@ interface LibraryProps {
   onDeleteClip?: (clipId: string) => void;
 }
 
-const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectClip, selectedClipId, onDeleteClip }) => {
+const Library = forwardRef<HTMLDivElement, LibraryProps>(({ library, onImportComplete, onSelectClip, selectedClipId, onDeleteClip }, ref) => {
   const [isDragging, setIsDragging] = useState(false);
+  const [activeTab, setActiveTab] = useState<'all' | 'video' | 'audio' | 'image' | 'filter'>('all');
   const { isImporting, importProgress, handleFileImport, error, warning, clearMessages } = useFileImport();
   
   // Countdown timers for auto-dismiss
   const errorCountdown = useCountdown(10, !!error);
   const warningCountdown = useCountdown(8, !!warning);
+  
+  // Filter clips based on active tab
+  const filteredLibrary = library.filter(clip => {
+    if (activeTab === 'all') return true;
+    if (activeTab === 'video') return clip.path.endsWith('.mp4') || clip.path.endsWith('.mov');
+    // Add more filters as needed
+    return true;
+  });
 
   /**
    * Handle file picker button click
@@ -126,58 +135,47 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
 
   return (
     <div 
-      className={`library-panel ${isDragging ? 'library-drag-over' : ''}`}
+      ref={ref}
+      className={`w-[15%] min-w-[180px] bg-[#1a1a1a] border-r border-[#333333] flex flex-col transition-colors ${isDragging ? 'border-2 border-dashed border-[#0066cc] bg-[rgba(0,102,204,0.1)]' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
     >
-      {/* Header with import button */}
-      <div className="library-header">
-        <h2>Library ({library.length})</h2>
+      {/* Header */}
+      <div className="px-3 py-2 border-b border-[#333333] bg-[#252525] flex-shrink-0">
+        <h2 className="text-sm font-medium text-white">Project Files</h2>
+      </div>
+
+      {/* Content area */}
+      <div className="flex-1 overflow-y-auto p-3">
+        {/* Import button */}
         <button 
-          className="import-button"
+          className="w-full bg-[#0066cc] text-white border-none rounded-md px-3 py-2 text-sm font-medium cursor-pointer transition-colors hover:bg-[#0052a3] disabled:bg-[#333333] disabled:text-[#666666] disabled:cursor-not-allowed mb-3"
           onClick={handleImportClick}
           disabled={isImporting}
         >
           {isImporting ? 'Importing...' : 'Import Videos'}
         </button>
-      </div>
 
-      {/* Error/Warning messages */}
-      {error && (
-        <div className="toast toast-error" onClick={clearMessages}>
-          <div className="toast-content">
-            <span className="toast-message">{error}</span>
-            <span className="toast-countdown">Auto-dismiss in {errorCountdown.countdown}s</span>
-          </div>
-        </div>
-      )}
-      {warning && (
-        <div className="toast toast-warning" onClick={clearMessages}>
-          <div className="toast-content">
-            <span className="toast-message">{warning}</span>
-            <span className="toast-countdown">Auto-dismiss in {warningCountdown.countdown}s</span>
-          </div>
-        </div>
-      )}
 
-      {/* Loading state */}
-      {isImporting && (
-        <div className="library-loading">
-          <div className="spinner"></div>
-          <p>{importProgress}</p>
-        </div>
-      )}
-
-      {/* Clip list or empty state */}
-      <div className="library-content">
-        {library.length === 0 && !isImporting ? (
-          <div className="empty-state">
-            <p>Drag & drop video files or click Import to get started</p>
+        {/* Loading state */}
+        {isImporting && (
+          <div className="flex flex-col items-center justify-center p-6 gap-3">
+            <div className="w-8 h-8 border-[3px] border-[#333333] border-t-[#0066cc] rounded-full animate-spin"></div>
+            <p className="text-sm text-[#999999] text-center">{importProgress}</p>
           </div>
-        ) : (
-          <div className="library-clips-container">
-            {library.map(clip => (
+        )}
+
+        {/* Clip list or empty state */}
+        {!isImporting && filteredLibrary.length === 0 && (
+          <div className="flex items-center justify-center h-full text-center">
+            <p className="text-[#999999] text-sm leading-relaxed max-w-[300px]">Drag & drop video files or click Import to get started</p>
+          </div>
+        )}
+
+        {!isImporting && filteredLibrary.length > 0 && (
+          <div className="flex flex-col gap-3">
+            {filteredLibrary.map(clip => (
               <LibraryClipCard
                 key={clip.id}
                 clip={clip}
@@ -189,9 +187,37 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
           </div>
         )}
       </div>
+
+      {/* Bottom tabs */}
+      <div className="flex border-t border-[#333333] bg-[#1a1a1a] flex-shrink-0">
+        <button className="px-3 py-2 text-xs font-medium text-white bg-[#2a2a2a]">Project Files</button>
+        <button className="px-3 py-2 text-xs font-medium text-[#999999] hover:text-white hover:bg-[#252525]">Transitions</button>
+        <button className="px-3 py-2 text-xs font-medium text-[#999999] hover:text-white hover:bg-[#252525]">Effects</button>
+        <button className="px-3 py-2 text-xs font-medium text-[#999999] hover:text-white hover:bg-[#252525]">Emojis</button>
+      </div>
+
+      {/* Error/Warning messages */}
+      {error && (
+        <div className="fixed top-16 right-4 p-3 px-4 rounded-md text-sm font-medium max-w-[350px] cursor-pointer z-[1000] animate-[slideIn_0.3s_ease-out] bg-[#cc0000] text-white" onClick={clearMessages}>
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">{error}</span>
+            <span className="text-xs opacity-80 italic">Auto-dismiss in {errorCountdown.countdown}s</span>
+          </div>
+        </div>
+      )}
+      {warning && (
+        <div className="fixed top-16 right-4 p-3 px-4 rounded-md text-sm font-medium max-w-[350px] cursor-pointer z-[1000] animate-[slideIn_0.3s_ease-out] bg-[#ffaa00] text-[#1a1a1a]" onClick={clearMessages}>
+          <div className="flex flex-col gap-1">
+            <span className="font-medium">{warning}</span>
+            <span className="text-xs opacity-80 italic">Auto-dismiss in {warningCountdown.countdown}s</span>
+          </div>
+        </div>
+      )}
     </div>
   );
-};
+});
+
+Library.displayName = 'Library';
 
 export default Library;
 

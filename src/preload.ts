@@ -150,11 +150,12 @@ contextBridge.exposeInMainWorld('electron', {
 
   /**
    * Starts video export process
-   * @param clips - Timeline clips to export
+   * @param clips - Timeline clips to export (legacy, use timelineDoc instead)
    * @param libraryClips - Library clips for source files
    * @param outputPath - Output file path (absolute)
    * @param projectState - Optional project state for auto-save before export
    * @param advancedSettings - Optional advanced export settings
+   * @param timelineDoc - Optional timeline document with multitrack structure (includes overlay tracks)
    * @returns Promise<void>
    * @throws Error if export fails
    */
@@ -163,9 +164,10 @@ contextBridge.exposeInMainWorld('electron', {
     libraryClips: any[],
     outputPath: string,
     projectState?: any,
-    advancedSettings?: any
+    advancedSettings?: any,
+    timelineDoc?: any
   ): Promise<void> => {
-    return ipcRenderer.invoke('export:start', clips, libraryClips, outputPath, projectState, advancedSettings);
+    return ipcRenderer.invoke('export:start', clips, libraryClips, outputPath, projectState, advancedSettings, timelineDoc);
   },
 
   /**

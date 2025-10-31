@@ -60,10 +60,10 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   };
 
   return (
-    <div className="player-controls">
+    <div className="flex-shrink-0 flex items-center gap-3">
       {/* Play/Pause button */}
       <button
-        className="player-play-pause-button"
+        className="bg-[#0066cc] text-white border-none rounded-md w-10 h-10 text-lg cursor-pointer flex items-center justify-center transition-colors hover:bg-[#0052a3] disabled:bg-[#333333] disabled:text-[#666666] disabled:cursor-not-allowed flex-shrink-0"
         onClick={onPlayPause}
         disabled={disabled}
         aria-label={isPlaying ? 'Pause' : 'Play'}
@@ -75,7 +75,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
       <input
         ref={progressBarRef}
         type="range"
-        className="player-progress-bar"
+        className="flex-1 h-1.5 rounded-sm bg-[#333333] outline-none cursor-pointer appearance-none [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-3.5 [&::-webkit-slider-thumb]:h-3.5 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-[#0066cc] [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:transition-colors [&::-webkit-slider-thumb]:hover:bg-[#0052a3] [&::-webkit-slider-thumb]:hover:scale-125 [&::-moz-range-thumb]:w-3.5 [&::-moz-range-thumb]:h-3.5 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-[#0066cc] [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:border-none [&::-moz-range-thumb]:transition-colors [&::-moz-range-thumb]:hover:bg-[#0052a3] [&::-moz-range-thumb]:hover:scale-125 disabled:cursor-not-allowed disabled:opacity-50"
         min="0"
         max="100"
         step="0.1"
@@ -88,7 +88,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
       />
 
       {/* Time display */}
-      <div className="player-time-display">
+      <div className="text-xs font-mono text-white min-w-[120px] text-right flex-shrink-0">
         {formatDuration(currentTime)} / {formatDuration(duration)}
       </div>
     </div>

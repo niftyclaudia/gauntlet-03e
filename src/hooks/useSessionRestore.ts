@@ -8,6 +8,7 @@
 import { useEffect, useRef } from 'react';
 import { VideoClip, TimelineClip } from '../types/video';
 import { deserializeProjectState, filterValidFilePaths } from '../utils/projectStateUtils';
+import { migrateToMagneticTimeline } from '../utils/magneticTimelineOperations';
 
 interface RestoredState {
   library: VideoClip[];
@@ -103,11 +104,17 @@ export function useSessionRestore({ onRestore }: UseSessionRestoreParams): void 
           window.electron.validateFileExists
         );
 
+        // Migrate timeline to magnetic format if needed (adds start times to old projects)
+        const migratedTimeline = migrateToMagneticTimeline(validTimeline);
+        if (migratedTimeline !== validTimeline) {
+          console.log('[SessionRestore] Migrated timeline to magnetic format');
+        }
+
         // Update selectedClipId if clip exists
         let selectedClipId = deserialized.selectedClipId;
         if (selectedClipId) {
           const clipExists = validLibrary.some(clip => clip.id === selectedClipId) ||
-                           validTimeline.some(clip => clip.id === selectedClipId);
+                           migratedTimeline.some(clip => clip.id === selectedClipId);
           if (!clipExists) {
             selectedClipId = null;
           }
@@ -116,7 +123,7 @@ export function useSessionRestore({ onRestore }: UseSessionRestoreParams): void 
         // Restore state via callback
         onRestore({
           library: validLibrary,
-          timeline: validTimeline,
+          timeline: migratedTimeline,
           selectedClipId,
           currentPlayheadPosition: deserialized.currentPlayheadPosition,
           timelineZoom: deserialized.timelineZoom,
