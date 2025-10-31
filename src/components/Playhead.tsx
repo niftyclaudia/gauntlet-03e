@@ -123,7 +123,7 @@ const Playhead: React.FC<PlayheadProps> = ({
       style={{
         position: 'absolute',
         left: `${xPosition}px`,
-        top: '-46px', // Extend up into the ruler area (40px ruler + 6px gap)
+        top: '-40px', // Extend up into the ruler area (40px ruler height)
         bottom: 0,
         width: '12px', // Wider hit area for easier grabbing
         marginLeft: '-6px', // Center the hit area
@@ -143,36 +143,36 @@ const Playhead: React.FC<PlayheadProps> = ({
         e.stopPropagation();
       }}
     >
-      {/* Diamond handle at top - OpenShot style (blue) */}
+      {/* White triangular arrowhead at top */}
       <div
         style={{
-          width: '12px',
-          height: '12px',
-          background: '#4A90E2',
-          transform: 'rotate(45deg)',
-          boxShadow: '0 0 6px rgba(74, 144, 226, 0.6)',
-          border: '1px solid rgba(74, 144, 226, 0.8)',
-          zIndex: 1001, // Above the playhead container
+          width: '0',
+          height: '0',
+          borderLeft: '6px solid transparent',
+          borderRight: '6px solid transparent',
+          borderTop: '8px solid #ffffff',
+          zIndex: 1001,
+          boxShadow: '0 0 4px rgba(255, 255, 255, 0.6)',
         }}
       />
       
-      {/* Line through ruler area */}
+      {/* White line through ruler area */}
       <div
         style={{
           width: '2px',
           height: '40px', // Height of ruler area
-          background: '#4A90E2',
-          boxShadow: '0 0 6px rgba(74, 144, 226, 0.6)',
+          background: '#ffffff',
+          boxShadow: '0 0 4px rgba(255, 255, 255, 0.6)',
         }}
       />
       
-      {/* Thin visual line down the timeline */}
+      {/* White line down the timeline */}
       <div
         style={{
           width: '2px',
           flex: 1,
-          background: '#4A90E2',
-          boxShadow: '0 0 6px rgba(74, 144, 226, 0.6)',
+          background: '#ffffff',
+          boxShadow: '0 0 4px rgba(255, 255, 255, 0.6)',
         }}
       />
     </div>

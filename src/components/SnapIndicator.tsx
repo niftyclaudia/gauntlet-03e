@@ -16,13 +16,16 @@ interface SnapIndicatorProps {
   timelineHeight?: number;
   /** CSS class name for styling */
   className?: string;
+  /** Additional inline styles */
+  style?: React.CSSProperties;
 }
 
 const SnapIndicator: React.FC<SnapIndicatorProps> = ({
   position,
   visible,
   timelineHeight = 110,
-  className = ''
+  className = '',
+  style = {}
 }) => {
   if (!visible) {
     return null;
@@ -41,6 +44,7 @@ const SnapIndicator: React.FC<SnapIndicatorProps> = ({
         zIndex: 50,
         pointerEvents: 'none',
         boxShadow: '0 0 4px rgba(0, 255, 0, 0.8)',
+        ...style, // Allow override via style prop
       }}
     />
   );
