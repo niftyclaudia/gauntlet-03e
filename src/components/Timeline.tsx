@@ -20,6 +20,10 @@ import { formatDuration } from '../utils/formatDuration';
 import { useTrimDrag } from '../hooks/useTrimDrag';
 import { migrateToMultitrack } from '../utils/multitrackMigration';
 
+const TRACK_HEIGHT = 80;
+const TIMELINE_VERTICAL_PADDING = 16;
+const CLIP_VERTICAL_PADDING = 4;
+
 interface TimelineProps {
   /** Array of timeline clips (legacy - for backward compatibility) */
   timeline: TimelineClip[];
@@ -36,7 +40,7 @@ interface TimelineProps {
   /** Timeline scroll position in pixels */
   timelineScrollPosition: number;
   /** Callback when clip is added to timeline */
-  onAddClip: (libraryClipId: string, insertionIndex?: number) => void;
+  onAddClip: (libraryClipId: string, insertionIndex?: number, trackId?: string, atTime?: number) => void;
   /** Callback when clip is reordered */
   onReorderClip: (dragIndex: number, hoverIndex: number) => void;
   /** Callback when clip is selected */
@@ -67,6 +71,8 @@ interface TimelineProps {
   onCreateOverlayTrack?: () => void;
   /** Callback when a track is selected (becomes active) */
   onSelectTrack?: (trackId: string | null) => void;
+  /** Callback when an overlay clip is moved to a new position */
+  onMoveOverlayClip?: (clipId: string, targetTrackId: string, targetTime: number) => void;
 }
 
 const Timeline: React.FC<TimelineProps> = ({
@@ -92,6 +98,7 @@ const Timeline: React.FC<TimelineProps> = ({
   activeTrackId,
   onCreateOverlayTrack,
   onSelectTrack,
+  onMoveOverlayClip,
 }) => {
   // Get TimelineDoc from prop or migrate from timeline array
   const doc: TimelineDoc = timelineDoc || migrateToMultitrack(timeline);
@@ -100,6 +107,10 @@ const Timeline: React.FC<TimelineProps> = ({
   const allTracks = doc?.tracks || [];
   const mainTrack = allTracks.find(t => t.role === 'main') || null;
   const overlayTracks = allTracks.filter(t => t.role === 'overlay');
+  const totalTracksHeight = allTracks.length * TRACK_HEIGHT;
+  const totalTimelineHeight = totalTracksHeight + TIMELINE_VERTICAL_PADDING * 2;
+  const trackContentHeight = TRACK_HEIGHT - CLIP_VERTICAL_PADDING * 2;
+  const trackContentTop = CLIP_VERTICAL_PADDING;
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const clipsContainerRef = useRef<HTMLDivElement>(null);
   const rulerRef = useRef<HTMLDivElement>(null);
@@ -117,6 +128,11 @@ const Timeline: React.FC<TimelineProps> = ({
   const [isReordering, setIsReordering] = useState(false);
   const [draggedClipIndex, setDraggedClipIndex] = useState<number | null>(null);
   const [libraryInsertIndex, setLibraryInsertIndex] = useState<number | null>(null);
+  const [hoveredTrackId, setHoveredTrackId] = useState<string | null>(null);
+  const [dropAtTime, setDropAtTime] = useState<number | null>(null);
+  const [isDraggingOverlayClip, setIsDraggingOverlayClip] = useState(false);
+  const [draggedOverlayClipId, setDraggedOverlayClipId] = useState<string | null>(null);
+  const [draggedOverlaySourceTrackId, setDraggedOverlaySourceTrackId] = useState<string | null>(null);
   const hasAutoFittedRef = useRef(false); // Track if auto-fit has been applied
   const previousTimelineLengthRef = useRef(0);
   const isDraggingPlayheadRef = useRef(false); // Track if playhead is being dragged
@@ -252,42 +268,84 @@ const Timeline: React.FC<TimelineProps> = ({
     if (e.dataTransfer.types.includes('application/library-clip-id')) {
       setIsDraggingFromLibrary(true);
       
-      // Calculate insertion index based on mouse position
+      // Calculate which track and position based on mouse position
       if (clipsContainerRef.current && timelineContainerRef.current) {
         const rect = clipsContainerRef.current.getBoundingClientRect();
         const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
         // Account for scroll position when comparing with clip positions
         const scrollX = timelineContainerRef.current.scrollLeft;
         const absoluteMouseX = mouseX + scrollX;
         
-        // Find which index to insert at based on X position
-        let insertIndex = timeline.length; // Default to end
+        // Determine which track the user is hovering over based on Y position
+        // Each track is 80px tall
+        const trackIndex = Math.floor(mouseY / 80);
+        const hoveredTrack = allTracks[trackIndex] || null;
         
-        for (let i = 0; i < sortedTimeline.length; i++) {
-          const clip = sortedTimeline[i];
-          const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
-          if (!libraryClip) continue;
+        if (hoveredTrack) {
+          setHoveredTrackId(hoveredTrack.id);
           
-          const clipPosition = calculateClipPosition(i, sortedTimeline, library, timelineZoom);
-          const clipWidth = applyClipWidthConstraints(calculateClipWidth(clip, libraryClip, timelineZoom));
-          
-          // Check if mouse is before this clip (insert before)
-          if (absoluteMouseX < clipPosition) {
-            insertIndex = i;
-            break;
-          }
-          // Check if mouse is in the first half of this clip (insert before)
-          else if (absoluteMouseX < clipPosition + clipWidth / 2) {
-            insertIndex = i;
-            break;
-          }
-          // Otherwise, insert after (continue to next iteration)
-          else if (i === sortedTimeline.length - 1) {
-            insertIndex = mainTrackClips.length;
+          if (hoveredTrack.role === 'main' && hoveredTrack.isMagnetic) {
+            // Main track - calculate insertion index
+            const trackClips = hoveredTrack.lanes[0]?.clips || [];
+            const sortedTrackClips = [...trackClips].sort((a, b) => a.order - b.order);
+            
+            let insertIndex = trackClips.length; // Default to end
+            
+            for (let i = 0; i < sortedTrackClips.length; i++) {
+              const clip = sortedTrackClips[i];
+              const libraryClip = library.find(lc => lc.id === clip.libraryClipId);
+              if (!libraryClip) continue;
+              
+              const clipPosition = calculateClipPosition(i, sortedTrackClips, library, timelineZoom);
+              const clipWidth = applyClipWidthConstraints(calculateClipWidth(clip, libraryClip, timelineZoom));
+              
+              // Check if mouse is before this clip (insert before)
+              if (absoluteMouseX < clipPosition) {
+                insertIndex = i;
+                break;
+              }
+              // Check if mouse is in the first half of this clip (insert before)
+              else if (absoluteMouseX < clipPosition + clipWidth / 2) {
+                insertIndex = i;
+                break;
+              }
+              // Otherwise, insert after (continue to next iteration)
+              else if (i === sortedTrackClips.length - 1) {
+                insertIndex = trackClips.length;
+              }
+            }
+            
+            setLibraryInsertIndex(insertIndex);
+            setDropAtTime(null); // Not used for main track
+          } else {
+            // Overlay track - use playhead position for predictable placement
+            setDropAtTime(currentPlayheadPosition);
+            setLibraryInsertIndex(null); // Not used for overlay track
           }
         }
-        
-        setLibraryInsertIndex(insertIndex);
+      }
+    } else if (e.dataTransfer.types.includes('application/overlay-clip-id')) {
+      // Handle overlay clip repositioning drag over
+      if (clipsContainerRef.current && timelineContainerRef.current) {
+        const rect = clipsContainerRef.current.getBoundingClientRect();
+        const mouseX = e.clientX - rect.left;
+        const mouseY = e.clientY - rect.top;
+        const scrollX = timelineContainerRef.current.scrollLeft;
+        const absoluteMouseX = mouseX + scrollX;
+
+        // Determine which track the user is hovering over based on Y position
+        const trackIndex = Math.floor(mouseY / 80);
+        const hoveredTrack = allTracks[trackIndex] || null;
+
+        if (hoveredTrack) {
+          setHoveredTrackId(hoveredTrack.id);
+
+          // Calculate time position from X coordinate
+          const BASE_PIXELS_PER_SECOND = 10;
+          const atTime = Math.max(0, absoluteMouseX / (timelineZoom * BASE_PIXELS_PER_SECOND));
+          setDropAtTime(atTime);
+        }
       }
     } else if (e.dataTransfer.types.includes('application/timeline-clip-index')) {
       // Handle timeline clip reordering drag over
@@ -337,12 +395,17 @@ const Timeline: React.FC<TimelineProps> = ({
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    
+
     // Only clear if leaving the timeline container
     if (!timelineContainerRef.current?.contains(e.relatedTarget as Node)) {
       setIsDraggingFromLibrary(false);
       setDragOverIndex(null);
       setLibraryInsertIndex(null);
+      setHoveredTrackId(null);
+      setDropAtTime(null);
+      setIsDraggingOverlayClip(false);
+      setDraggedOverlayClipId(null);
+      setDraggedOverlaySourceTrackId(null);
     }
   };
 
@@ -352,13 +415,44 @@ const Timeline: React.FC<TimelineProps> = ({
     setIsDraggingFromLibrary(false);
     setDragOverIndex(null);
 
+    // Check if repositioning overlay clip
+    const overlayClipId = e.dataTransfer.getData('application/overlay-clip-id');
+    if (overlayClipId && onMoveOverlayClip) {
+      const targetTrackId = hoveredTrackId || draggedOverlaySourceTrackId;
+      const targetTime = dropAtTime !== null ? dropAtTime : 0;
+
+      if (targetTrackId) {
+        console.log('[Timeline] Repositioning overlay clip:', overlayClipId, 'to track:', targetTrackId, 'at time:', targetTime);
+        onMoveOverlayClip(overlayClipId, targetTrackId, targetTime);
+      }
+
+      // Clear state
+      setIsDraggingOverlayClip(false);
+      setDraggedOverlayClipId(null);
+      setDraggedOverlaySourceTrackId(null);
+      setHoveredTrackId(null);
+      setDropAtTime(null);
+      return;
+    }
+
     // Check if dropping from Library
     const libraryClipId = e.dataTransfer.getData('application/library-clip-id');
     if (libraryClipId) {
-      // Use the calculated insert index, or append to end if not calculated
-      const insertIndex = libraryInsertIndex !== null ? libraryInsertIndex : mainTrackClips.length;
-      onAddClip(libraryClipId, insertIndex);
+      // Determine which track and how to add
+      const targetTrack = hoveredTrackId ? allTracks.find(t => t.id === hoveredTrackId) : null;
+      
+      if (targetTrack && targetTrack.role === 'overlay' && dropAtTime !== null) {
+        // Overlay track - use time position
+        onAddClip(libraryClipId, undefined, targetTrack.id, dropAtTime);
+      } else {
+        // Main track - use insertion index
+        const insertIndex = libraryInsertIndex !== null ? libraryInsertIndex : mainTrackClips.length;
+        onAddClip(libraryClipId, insertIndex);
+      }
+      
       setLibraryInsertIndex(null);
+      setHoveredTrackId(null);
+      setDropAtTime(null);
       return;
     }
 
@@ -416,12 +510,26 @@ const Timeline: React.FC<TimelineProps> = ({
     }
   };
 
-  // Handle clip drag start (for reordering)
-  const handleClipDragStart = (e: React.DragEvent, clipIndex: number) => {
-    setDraggedClipIndex(clipIndex);
-    setIsReordering(true);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('application/timeline-clip-index', String(clipIndex));
+  // Handle clip drag start (for reordering or repositioning)
+  const handleClipDragStart = (e: React.DragEvent, clipIndex: number, trackId?: string, clipId?: string) => {
+    // Find the track this clip belongs to
+    const clipTrack = trackId ? allTracks.find(t => t.id === trackId) : mainTrack;
+
+    if (clipTrack && clipTrack.role === 'overlay') {
+      // Dragging overlay clip - enable repositioning
+      setIsDraggingOverlayClip(true);
+      setDraggedOverlayClipId(clipId || null);
+      setDraggedOverlaySourceTrackId(clipTrack.id);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('application/overlay-clip-id', clipId || '');
+      e.dataTransfer.setData('application/overlay-track-id', clipTrack.id);
+    } else {
+      // Dragging main track clip - use index-based reordering
+      setDraggedClipIndex(clipIndex);
+      setIsReordering(true);
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('application/timeline-clip-index', String(clipIndex));
+    }
   };
 
   // Handle click on timeline to seek playhead
@@ -806,11 +914,36 @@ const Timeline: React.FC<TimelineProps> = ({
       </div>
 
       {/* Two-column content wrapper */}
-      <div className="flex flex-1 overflow-visible min-h-0">
+      <div className="flex flex-1 overflow-visible min-h-0 relative">
+        {/* Blue outline for main track - spans full width */}
+        {allTracks.length > 0 && (() => {
+          const mainTrackIndex = allTracks.findIndex(t => t.role === 'main');
+          if (mainTrackIndex >= 0) {
+            return (
+              <div
+                className="absolute pointer-events-none"
+                style={{
+                  top: `${TIMELINE_VERTICAL_PADDING + mainTrackIndex * TRACK_HEIGHT}px`, // Account for timeline padding
+                  left: '0px',
+                  right: '0px',
+                  height: `${TRACK_HEIGHT}px`,
+                  borderRadius: '4px',
+                  zIndex: 50,
+                }}
+              />
+            );
+          }
+          return null;
+        })()}
+
         {/* Left column: Track controls */}
         <div 
           ref={sidebarRef}
           className="w-[120px] min-w-[120px] bg-[#1a1a1a] border-r border-[#333333] flex flex-col overflow-y-auto overflow-x-visible flex-shrink-0 relative outline-none" 
+          style={{
+            paddingTop: `${TIMELINE_VERTICAL_PADDING}px`,
+            paddingBottom: `${TIMELINE_VERTICAL_PADDING}px`,
+          }}
           tabIndex={-1}
         >
           {/* Render each track - no spacer, starts immediately */}
@@ -829,7 +962,7 @@ const Timeline: React.FC<TimelineProps> = ({
               const isActive = activeTrackId === track.id;
             
               return (
-                <div 
+                <div
                   key={track.id}
                   className={`flex flex-col h-[80px] border-b border-[#333333] outline-none cursor-pointer transition-colors ${
                     isActive ? 'bg-[#2a4a6a] hover:bg-[#2a5a7a]' : 'hover:bg-[#252525]'
@@ -862,9 +995,9 @@ const Timeline: React.FC<TimelineProps> = ({
           {/* Timeline container with clips - clips content at top, playhead extends upward */}
           <div
             ref={timelineContainerRef}
-            className={`flex-1 overflow-x-auto overflow-y-auto bg-[#2a2a2a] relative cursor-default ${isDraggingFromLibrary ? 'border-2 border-dashed border-[#0066cc] bg-[rgba(0,102,204,0.1)]' : ''}`}
+            className={`timeline-container flex-1 overflow-x-auto overflow-y-auto bg-[#2a2a2a] relative cursor-default`}
             style={{
-              minHeight: `${allTracks.length * 80}px`, // Ensure container is tall enough for all tracks
+              minHeight: `${totalTimelineHeight}px`, // Ensure container is tall enough for all tracks plus padding
               zIndex: 1, // Below ruler
             }}
             onDragOver={handleDragOver}
@@ -877,7 +1010,7 @@ const Timeline: React.FC<TimelineProps> = ({
             <Playhead
               position={currentPlayheadPosition}
               zoom={timelineZoom}
-              timelineHeight={allTracks.length * 80}
+              timelineHeight={totalTimelineHeight}
               onDrag={handlePlayheadDragChange}
               onDragEnd={handlePlayheadDragEnd}
               onClick={(position) => {
@@ -903,14 +1036,14 @@ const Timeline: React.FC<TimelineProps> = ({
             <SnapIndicator
               position={snapIndicatorPosition || 0}
               visible={snapIndicatorPosition !== null}
-              timelineHeight={allTracks.length * 80}
+              timelineHeight={totalTimelineHeight}
             />
 
             {/* Cut Line - positioned relative to timeline container */}
             <CutLine
               position={currentPlayheadPosition * timelineZoom * 10} // Convert time to pixels
               visible={false} // Disabled since playhead now shows red color when over clip
-              timelineHeight={allTracks.length * 80}
+              timelineHeight={totalTimelineHeight}
             />
 
             {/* Clips container - render one row per track */}
@@ -919,9 +1052,11 @@ const Timeline: React.FC<TimelineProps> = ({
               className="relative timeline-clips-container"
               style={{
                 position: 'relative',
-                minHeight: `${allTracks.length * 80}px`, // Tracks only, no ruler offset
+                minHeight: `${totalTracksHeight}px`, // Tracks only, padding handled separately
                 minWidth: `${totalDuration * timelineZoom * 10}px`, // 10 pixels per second at 100% zoom - width scales with zoom
-                height: `${allTracks.length * 80}px`, // Exact height to match tracks
+                height: `${totalTracksHeight}px`, // Exact height to match tracks (padding added below)
+                paddingTop: `${TIMELINE_VERTICAL_PADDING}px`,
+                paddingBottom: `${TIMELINE_VERTICAL_PADDING}px`,
               }}
             >
 
@@ -942,13 +1077,14 @@ const Timeline: React.FC<TimelineProps> = ({
                     className="relative border-b border-[#444444] bg-[#2a2a2a]"
                     style={{
                       position: 'absolute',
-                      top: `${trackIndex * 80}px`, // Start at track index * 80px (no ruler offset)
+                      top: `${trackIndex * TRACK_HEIGHT}px`, // Start at track index * track height (padding handled by container)
                       left: '0px',
                       width: '100%',
-                      height: '80px',
+                      height: `${TRACK_HEIGHT}px`,
                       zIndex: 1, // Ensure tracks are below playhead but above background
                     }}
                   >
+
 
                     {/* Drop zone before first clip (for library drag) - only on main track */}
                     {track.role === 'main' && isDraggingFromLibrary && libraryInsertIndex === 0 && (
@@ -956,9 +1092,9 @@ const Timeline: React.FC<TimelineProps> = ({
                   style={{
                     position: 'absolute',
                     left: '0px',
-                    top: '20px',
+                    top: `${trackContentTop}px`,
                     width: '30px',
-                    height: '80px',
+                    height: `${trackContentHeight}px`,
                     zIndex: 20,
                     pointerEvents: 'none',
                   }}
@@ -966,6 +1102,22 @@ const Timeline: React.FC<TimelineProps> = ({
                   <div className="absolute left-[-1px] top-0 bottom-0 w-0.5 bg-[#0066cc] z-[5]" />
                 </div>
               )}
+
+                    {/* Visual feedback for overlay track drag - show drop indicator at mouse position */}
+                    {track.role === 'overlay' && isDraggingFromLibrary && hoveredTrackId === track.id && dropAtTime !== null && (
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: `${dropAtTime * timelineZoom * 10 - 1}px`, // Convert time to pixels
+                          top: `${trackContentTop}px`,
+                          width: '2px',
+                          height: `${trackContentHeight}px`,
+                          zIndex: 20,
+                          pointerEvents: 'none',
+                          backgroundColor: '#0066cc',
+                        }}
+                      />
+                    )}
 
                     {/* Clip cards for this track */}
                     {sortedTrackClips.map((clip, clipIndex) => {
@@ -1021,9 +1173,9 @@ const Timeline: React.FC<TimelineProps> = ({
                         style={{
                           position: 'absolute',
                           left: `${clipPosition - 15}px`,
-                          top: '0px',
+                          top: `${trackContentTop}px`,
                           width: '30px',
-                          height: '80px',
+                          height: `${trackContentHeight}px`,
                           zIndex: 20,
                           pointerEvents: isDraggingFromLibrary ? 'none' : 'auto',
                         }}
@@ -1048,8 +1200,8 @@ const Timeline: React.FC<TimelineProps> = ({
                         style={{
                           position: 'absolute',
                           left: `${clipPosition}px`,
-                          top: '0px', // Align with top of track row
-                          height: '80px', // Match track row height exactly
+                          top: `${CLIP_VERTICAL_PADDING}px`, // Provide vertical padding within track row
+                          height: `${TRACK_HEIGHT - CLIP_VERTICAL_PADDING * 2}px`, // Maintain consistent padding
                           pointerEvents: 'auto', // Ensure wrapper doesn't block interactions
                           zIndex: shouldRaiseZIndex ? 100 : 1, // Raise when trimming/hovered to prevent blocking
                         }}
@@ -1093,9 +1245,9 @@ const Timeline: React.FC<TimelineProps> = ({
                             style={{
                               position: 'absolute',
                               left: `${clipPosition + clipWidth - 15}px`,
-                              top: '0px',
+                              top: `${trackContentTop}px`,
                               width: '30px',
-                              height: '80px',
+                              height: `${trackContentHeight}px`,
                               zIndex: 20,
                             }}
                             onDragOver={(e) => {
@@ -1113,9 +1265,9 @@ const Timeline: React.FC<TimelineProps> = ({
                             style={{
                               position: 'absolute',
                               left: `${clipPosition + clipWidth + 5}px`,
-                              top: '0px',
+                              top: `${trackContentTop}px`,
                               width: '30px',
-                              height: '80px',
+                              height: `${trackContentHeight}px`,
                               zIndex: 20,
                               pointerEvents: 'none',
                             }}
@@ -1135,9 +1287,9 @@ const Timeline: React.FC<TimelineProps> = ({
                   style={{
                     position: 'absolute',
                     left: '0px',
-                    top: '0px',
+                    top: `${trackContentTop}px`,
                     width: '30px',
-                    height: '80px',
+                    height: `${trackContentHeight}px`,
                     zIndex: 20,
                     pointerEvents: 'none',
                   }}

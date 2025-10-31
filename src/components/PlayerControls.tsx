@@ -60,7 +60,7 @@ const PlayerControls: React.FC<PlayerControlsProps> = ({
   };
 
   return (
-    <div className="flex-shrink-0 flex items-center gap-3 py-2">
+    <div className="flex-shrink-0 flex items-center gap-3">
       {/* Play/Pause button */}
       <button
         className="bg-[#0066cc] text-white border-none rounded-md w-10 h-10 text-lg cursor-pointer flex items-center justify-center transition-colors hover:bg-[#0052a3] disabled:bg-[#333333] disabled:text-[#666666] disabled:cursor-not-allowed flex-shrink-0"

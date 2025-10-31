@@ -21,7 +21,7 @@ interface TimelineClipCardProps {
   /** Callback when clip is clicked */
   onClick: () => void;
   /** Callback when drag starts */
-  onDragStart: (e: React.DragEvent, clipIndex: number) => void;
+  onDragStart: (e: React.DragEvent, clipIndex: number, trackId?: string, clipId?: string) => void;
   /** Callback when clip is deleted */
   onDelete: () => void;
   /** Clip index in timeline */
@@ -171,7 +171,7 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
     e.dataTransfer.effectAllowed = 'move';
     // Prevent click from firing
     e.stopPropagation();
-    onDragStart(e, clipIndex);
+    onDragStart(e, clipIndex, clip.trackId, clip.id);
   };
 
   const handleDragEnd = () => {
@@ -259,16 +259,16 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
   return (
     <div
       className={`bg-[#1a1a1a] cursor-move transition-all z-[50] border-2 border-transparent select-none pointer-events-auto relative ${
-        isSelected ? 'border-[#0066cc] shadow-[0_0_0_2px_rgba(0,102,204,0.3)]' : ''
+        isSelected ? '' : ''
       } ${hasTrimHandleActive ? 'z-[100]' : ''} ${isDragging ? '' : ''} hover:border-[#666666]`}
       style={{
         width: `${clipWidth}px`,
         minWidth: '50px',
         opacity: isDragging ? 0.7 : 1,
-        height: `${BASE_CLIP_HEIGHT}px`, // Match track height exactly - 80px
+        height: '100%', // Fill full height of wrapper (which matches track height)
         padding: 0, // No padding to fill full height
         margin: 0, // No margin
-        boxSizing: 'border-box', // Include border in height calculation so total height stays 80px
+        boxSizing: 'border-box', // Include border in height calculation
       }}
       onClick={handleClick}
       onMouseDown={handleMouseDown}
@@ -341,7 +341,13 @@ const TimelineClipCard: React.FC<TimelineClipCardProps> = ({
           }}
         />
       </div>
-      <div className="mt-1 text-[11px] text-white whitespace-nowrap overflow-hidden text-ellipsis">
+      {/* Filename overlay - positioned absolutely within clip bounds */}
+      <div 
+        className="absolute bottom-0 left-0 right-0 text-[11px] text-white whitespace-nowrap overflow-hidden text-ellipsis bg-gradient-to-t from-black/80 to-transparent px-1 py-0.5 pointer-events-none"
+        style={{
+          maxWidth: '100%',
+        }}
+      >
         {displayFilename}
       </div>
     </div>

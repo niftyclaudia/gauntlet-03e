@@ -5,7 +5,7 @@
  * Supports video import via drag-and-drop and file picker.
  */
 
-import React, { useState, DragEvent } from 'react';
+import React, { useState, DragEvent, forwardRef } from 'react';
 import { VideoClip } from '../types/video';
 import LibraryClipCard from './LibraryClipCard';
 import { useFileImport } from '../hooks/useFileImport';
@@ -24,7 +24,7 @@ interface LibraryProps {
   onDeleteClip?: (clipId: string) => void;
 }
 
-const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectClip, selectedClipId, onDeleteClip }) => {
+const Library = forwardRef<HTMLDivElement, LibraryProps>(({ library, onImportComplete, onSelectClip, selectedClipId, onDeleteClip }, ref) => {
   const [isDragging, setIsDragging] = useState(false);
   const [activeTab, setActiveTab] = useState<'all' | 'video' | 'audio' | 'image' | 'filter'>('all');
   const { isImporting, importProgress, handleFileImport, error, warning, clearMessages } = useFileImport();
@@ -135,6 +135,7 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
 
   return (
     <div 
+      ref={ref}
       className={`w-[15%] min-w-[180px] bg-[#1a1a1a] border-r border-[#333333] flex flex-col transition-colors ${isDragging ? 'border-2 border-dashed border-[#0066cc] bg-[rgba(0,102,204,0.1)]' : ''}`}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -143,60 +144,6 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
       {/* Header */}
       <div className="px-3 py-2 border-b border-[#333333] bg-[#252525] flex-shrink-0">
         <h2 className="text-sm font-medium text-white">Project Files</h2>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex border-b border-[#333333] bg-[#1a1a1a] flex-shrink-0">
-        <button
-          onClick={() => setActiveTab('all')}
-          className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === 'all'
-              ? 'bg-[#2a2a2a] text-white border-b-2 border-[#0066cc]'
-              : 'text-[#999999] hover:text-white hover:bg-[#252525]'
-          }`}
-        >
-          Show All
-        </button>
-        <button
-          onClick={() => setActiveTab('video')}
-          className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === 'video'
-              ? 'bg-[#2a2a2a] text-white border-b-2 border-[#0066cc]'
-              : 'text-[#999999] hover:text-white hover:bg-[#252525]'
-          }`}
-        >
-          Video
-        </button>
-        <button
-          onClick={() => setActiveTab('audio')}
-          className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === 'audio'
-              ? 'bg-[#2a2a2a] text-white border-b-2 border-[#0066cc]'
-              : 'text-[#999999] hover:text-white hover:bg-[#252525]'
-          }`}
-        >
-          Audio
-        </button>
-        <button
-          onClick={() => setActiveTab('image')}
-          className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === 'image'
-              ? 'bg-[#2a2a2a] text-white border-b-2 border-[#0066cc]'
-              : 'text-[#999999] hover:text-white hover:bg-[#252525]'
-          }`}
-        >
-          Image
-        </button>
-        <button
-          onClick={() => setActiveTab('filter')}
-          className={`px-3 py-1.5 text-xs font-medium transition-colors ${
-            activeTab === 'filter'
-              ? 'bg-[#2a2a2a] text-white border-b-2 border-[#0066cc]'
-              : 'text-[#999999] hover:text-white hover:bg-[#252525]'
-          }`}
-        >
-          Filter
-        </button>
       </div>
 
       {/* Content area */}
@@ -268,7 +215,9 @@ const Library: React.FC<LibraryProps> = ({ library, onImportComplete, onSelectCl
       )}
     </div>
   );
-};
+});
+
+Library.displayName = 'Library';
 
 export default Library;
 

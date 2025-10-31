@@ -15,6 +15,8 @@ interface ToolbarProps {
   onAddFiles?: () => void;
   onExport?: () => void;
   onRecord?: () => void;
+  onPlayPause?: () => void;
+  isPlaying?: boolean;
 }
 
 const Toolbar: React.FC<ToolbarProps> = ({
@@ -26,6 +28,8 @@ const Toolbar: React.FC<ToolbarProps> = ({
   onAddFiles,
   onExport,
   onRecord,
+  onPlayPause,
+  isPlaying,
 }) => {
   return (
     <div className="flex items-center h-10 bg-[#2a2a2a] border-b border-[#333333] px-3 gap-2">
@@ -92,6 +96,25 @@ const Toolbar: React.FC<ToolbarProps> = ({
 
       <div className="w-px h-6 bg-[#444444] mx-1" />
 
+      {/* Play/Pause */}
+      <button
+        onClick={onPlayPause}
+        className="w-8 h-8 flex items-center justify-center hover:bg-[#3a3a3a] rounded transition-colors"
+        title={isPlaying ? 'Pause' : 'Play'}
+      >
+        {isPlaying ? (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 4H10V12H6V4Z" fill="currentColor"/>
+          </svg>
+        ) : (
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M6 4L12 8L6 12V4Z" fill="currentColor"/>
+          </svg>
+        )}
+      </button>
+
+      <div className="w-px h-6 bg-[#444444] mx-1" />
+
       {/* Add Files */}
       <button
         onClick={onAddFiles}
@@ -103,15 +126,15 @@ const Toolbar: React.FC<ToolbarProps> = ({
         </svg>
       </button>
 
-      {/* Export Video */}
+      {/* Share/Export */}
       <button
         onClick={onExport}
         className="w-8 h-8 flex items-center justify-center hover:bg-[#3a3a3a] rounded transition-colors"
-        title="Export Video"
+        title="Share/Export Video"
       >
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <path d="M14 10V12.6667C14 13.0203 13.8595 13.3594 13.6095 13.6095C13.3594 13.8595 13.0203 14 12.6667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
-          <path d="M8 2V10M8 2L5 5M8 2L11 5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M14 10V12.6667C14 13.0203 13.8595 13.3594 13.6095 13.6095C13.3594 13.8595 13.0203 14 12.6667 14H3.33333C2.97971 14 2.64057 13.8595 2.39052 13.6095C2.14048 13.3594 2 13.0203 2 12.6667V10" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
+          <path d="M8 2V10M8 2L5 5M8 2L11 5" stroke="white" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"/>
         </svg>
       </button>
 

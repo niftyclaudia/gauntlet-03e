@@ -192,14 +192,16 @@ export interface ExportSettings {
  * Export parameters for video export pipeline
  */
 export interface ExportParams {
-  /** Timeline clips to export (sorted by order) */
-  clips: TimelineClip[];
+  /** Timeline clips to export (sorted by order) - deprecated, use timelineDoc instead */
+  clips?: TimelineClip[];
   /** Library clips map (for accessing source file paths) */
   libraryClips: VideoClip[];
   /** Output file path (absolute path) */
   outputPath: string;
   /** Export settings (fixed preset) */
   settings: ExportSettings;
+  /** Timeline document with multitrack structure (includes overlay tracks) */
+  timelineDoc?: import('./timeline').TimelineDoc;
 }
 
 /**

@@ -12,6 +12,7 @@ import MenuBar from './components/MenuBar';
 import Toolbar from './components/Toolbar';
 import Library from './components/Library';
 import VideoPlayer from './components/VideoPlayer';
+import MultitrackPreviewPlayer from './components/MultitrackPreviewPlayer';
 import Timeline from './components/Timeline';
 import TimelineZoomControls from './components/TimelineZoomControls';
 import RecordScreenDialog from './components/RecordScreenDialog';
@@ -44,6 +45,9 @@ import { useAutoSave } from './hooks/useAutoSave';
 import { useSessionRestore } from './hooks/useSessionRestore';
 import { useFileImport } from './hooks/useFileImport';
 import { serializeProjectState } from './utils/projectStateUtils';
+import { useTimelineStore } from './stores/timelineStore';
+import { InsertCommand, DeleteCommand, MoveCommand, SplitCommand, TrimCommand } from './utils/timeline/commands';
+import { useUndoRedo } from './hooks/useUndoRedo';
 
 // Simple UUID v4 generator
 const generateUUID = (): string => {
@@ -55,34 +59,62 @@ const generateUUID = (): string => {
 };
 
 const App: React.FC = () => {
-  // Library state
-  const [library, setLibrary] = useState<VideoClip[]>([]);
+  // Zustand timeline store (V2 architecture)
+  const timelineStore = useTimelineStore();
+  const executeCommand = useTimelineStore(state => state.executeCommand);
+  const setTimelineDoc = useTimelineStore(state => state.setTimelineDoc);
+  const setLibrary = useTimelineStore(state => state.setLibrary);
+  const selectClip = useTimelineStore(state => state.selectClip);
+  const setPlayheadPosition = useTimelineStore(state => state.setPlayheadPosition);
+  const setZoom = useTimelineStore(state => state.setZoom);
+  const setScrollPosition = useTimelineStore(state => state.setScrollPosition);
+
+  // Enable undo/redo keyboard shortcuts
+  useUndoRedo();
+
+  // Library state from store (single source of truth)
+  const library = useTimelineStore(state => state.library);
+
   const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+  
+  // Sync selectedClipId with store
+  useEffect(() => {
+    const storeSelectedId = useTimelineStore.getState().selectedClipId;
+    if (storeSelectedId !== selectedClipId) {
+      setSelectedClipId(storeSelectedId);
+    }
+  }, [useTimelineStore.getState().selectedClipId]);
+
+  useEffect(() => {
+    selectClip(selectedClipId);
+  }, [selectedClipId, selectClip]);
 
   // File import hook (for toolbar)
   const { handleFileImport: importFiles } = useFileImport();
 
-  // Timeline state
+  // Timeline state (backward compatibility - synced with store)
+  const timelineDoc = useTimelineStore(state => state.timelineDoc);
   const [timeline, setTimeline] = useState<TimelineClip[]>([]);
-  const [timelineDoc, setTimelineDoc] = useState<TimelineDoc | undefined>(undefined);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null); // Track where new clips will be added
-  const [timelineZoom, setTimelineZoom] = useState<number>(1.0);
-  const [timelineScrollPosition, setTimelineScrollPosition] = useState<number>(0);
-  const [currentPlayheadPosition, setCurrentPlayheadPosition] = useState<number>(0);
+  const timelineZoom = useTimelineStore(state => state.zoom);
+  const timelineScrollPosition = useTimelineStore(state => state.scrollPosition);
+  const currentPlayheadPosition = useTimelineStore(state => state.playheadPosition);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isExporting] = useState<boolean>(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [exportHandler, setExportHandler] = useState<(() => void) | null>(null);
+  const [playPauseHandler, setPlayPauseHandler] = useState<(() => void) | null>(null);
   
   // Initialize timelineDoc from timeline on mount (one-time migration)
   useEffect(() => {
-    if (timeline.length > 0 && !timelineDoc) {
+    if (timeline.length > 0 && timelineDoc.tracks.length === 0) {
       const doc = migrateToMultitrack(timeline);
       setTimelineDoc(doc);
       // Set main track as active by default
       if (doc.tracks.length > 0 && doc.tracks[0].role === 'main') {
         setActiveTrackId(doc.tracks[0].id);
       }
-    } else if (timeline.length === 0 && timelineDoc && extractMainTrackClips(timelineDoc).length > 0) {
+    } else if (timeline.length === 0 && timelineDoc.tracks.length > 0 && extractMainTrackClips(timelineDoc).length > 0) {
       // Clear timelineDoc if timeline becomes empty
       setTimelineDoc(createEmptyTimelineDoc());
     }
@@ -90,7 +122,7 @@ const App: React.FC = () => {
 
   // Initialize active track when timelineDoc is created
   useEffect(() => {
-    if (timelineDoc && !activeTrackId && timelineDoc.tracks.length > 0) {
+    if (timelineDoc.tracks.length > 0 && !activeTrackId) {
       // Set main track as active by default
       const mainTrack = timelineDoc.tracks.find(t => t.role === 'main');
       if (mainTrack) {
@@ -101,7 +133,7 @@ const App: React.FC = () => {
   
   // Sync timeline array from timelineDoc main track (for backward compatibility)
   useEffect(() => {
-    if (timelineDoc) {
+    if (timelineDoc.tracks.length > 0) {
       const mainTrackClips = extractMainTrackClips(timelineDoc);
       // Only update if arrays have different lengths or clip IDs (avoid unnecessary updates)
       const clipsChanged = 
@@ -123,6 +155,7 @@ const App: React.FC = () => {
   
   // Refs for click-outside detection
   const timelineRef = useRef<HTMLDivElement>(null);
+  const libraryRef = useRef<HTMLDivElement>(null);
   const selectedClipIdRef = useRef<string | null>(null);
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   
@@ -155,8 +188,9 @@ const App: React.FC = () => {
    * Adds newly imported clips to library
    */
   const handleImportComplete = (newClips: VideoClip[]) => {
-    setLibrary(prev => [...newClips, ...prev]); // Add new clips at top (most recent first)
-    console.log(`[App] Imported ${newClips.length} clip(s). Library now has ${library.length + newClips.length} clips.`);
+    const currentLibrary = useTimelineStore.getState().library;
+    setLibrary([...newClips, ...currentLibrary]); // Add new clips at top (most recent first)
+    console.log(`[App] Imported ${newClips.length} clip(s). Library now has ${currentLibrary.length + newClips.length} clips.`);
   };
 
   /**
@@ -165,131 +199,133 @@ const App: React.FC = () => {
    */
   const handleSelectClip = (clip: VideoClip) => {
     setSelectedClipId(clip.id);
+    selectClip(clip.id); // Also update store
     console.log(`[App] Selected clip: ${clip.filename}`);
   };
 
   /**
    * Handle adding clip from Library to Timeline (with ripple insert)
+   * Uses V2 command pattern for undo/redo support
    */
-  const handleAddClipToTimeline = (libraryClipId: string, insertionIndex?: number) => {
-    setTimelineDoc(prevDoc => {
-      if (!prevDoc) {
-        const newDoc = migrateToMultitrack(timeline);
-        const mainTrack = newDoc.tracks.find(t => t.role === 'main');
-        if (mainTrack) {
-          setActiveTrackId(mainTrack.id);
-        }
-        // Add clip to the newly created doc
-        if (mainTrack && mainTrack.isMagnetic) {
-          return addClipToMainTrackMagnetic(
-            libraryClipId,
-            newDoc,
-            timeline,
-            library,
-            insertionIndex,
-            'ripple'
-          );
-        }
-        return newDoc;
+  const handleAddClipToTimeline = (libraryClipId: string, insertionIndex?: number, trackId?: string, atTime?: number) => {
+    const currentDoc = useTimelineStore.getState().timelineDoc;
+    const currentLibrary = useTimelineStore.getState().library;
+    
+    // Ensure timelineDoc exists
+    let doc = currentDoc;
+    if (doc.tracks.length === 0) {
+      doc = migrateToMultitrack(timeline);
+      setTimelineDoc(doc);
+      // Set main track as active by default
+      if (doc.tracks.length > 0 && doc.tracks[0].role === 'main') {
+        setActiveTrackId(doc.tracks[0].id);
       }
+    }
 
-      // Find active track
-      const activeTrack = prevDoc.tracks.find(t => t.id === activeTrackId);
+    // Find target track (use provided trackId, or active track, or main track)
+    const targetTrack = trackId 
+      ? doc.tracks.find(t => t.id === trackId)
+      : (doc.tracks.find(t => t.id === activeTrackId) || doc.tracks.find(t => t.role === 'main'));
+    
+    if (!targetTrack) {
+      console.warn('[App] No target track found for adding clip');
+      return;
+    }
+
+    // Use command pattern for undo/redo support
+    if (targetTrack.role === 'main' && targetTrack.isMagnetic) {
+      // Main track - use insertion index
+      const command = new InsertCommand({
+        libraryClipId,
+        trackId: targetTrack.id,
+        insertionIndex,
+        mode: 'ripple',
+      });
+      executeCommand(command);
+      console.log(`[App] Added clip ${libraryClipId} to main track at index ${insertionIndex ?? timeline.length}`);
+    } else {
+      // Overlay track - use provided atTime or fallback to playhead position
+      const laneId = targetTrack.lanes[0]?.id;
+      if (!laneId) {
+        console.warn(`[App] Track ${targetTrack.id} has no lanes`);
+        return;
+      }
       
-      if (!activeTrack) {
-        // Fallback to main track if no active track
-        const mainTrack = prevDoc.tracks.find(t => t.role === 'main');
-        if (mainTrack) {
-          const updatedDoc = addClipToMainTrackMagnetic(
-            libraryClipId,
-            prevDoc,
-            timeline,
-            library,
-            insertionIndex,
-            'ripple'
-          );
-          console.log(`[App] Added clip ${libraryClipId} to main track (fallback) at index ${insertionIndex ?? timeline.length}`);
-          return updatedDoc;
-        }
-        return prevDoc;
-      }
-
-      // Add to main track (magnetic)
-      if (activeTrack.role === 'main' && activeTrack.isMagnetic) {
-        const updatedDoc = addClipToMainTrackMagnetic(
-          libraryClipId,
-          prevDoc,
-          timeline,
-          library,
-          insertionIndex,
-          'ripple'
-        );
-        console.log(`[App] Added clip ${libraryClipId} to main track at index ${insertionIndex ?? timeline.length}`);
-        return updatedDoc;
-      }
-
-      // Add to overlay track (freeform, at playhead position)
-      if (activeTrack.role === 'overlay' && !activeTrack.isMagnetic) {
-        const laneId = activeTrack.lanes[0]?.id;
-        if (!laneId) {
-          console.warn(`[App] Overlay track ${activeTrack.id} has no lanes`);
-          return prevDoc;
-        }
-        
-        const updatedDoc = addClipToOverlay(
-          libraryClipId,
-          prevDoc,
-          library,
-          activeTrack.id,
-          laneId,
-          currentPlayheadPosition // Place at current playhead
-        );
-        console.log(`[App] Added clip ${libraryClipId} to overlay track ${activeTrack.id} at time ${currentPlayheadPosition.toFixed(2)}s`);
-        return updatedDoc;
-      }
-
-      return prevDoc;
-    });
+      const dropTime = atTime !== undefined ? atTime : currentPlayheadPosition;
+      
+      const command = new InsertCommand({
+        libraryClipId,
+        trackId: targetTrack.id,
+        laneId,
+        atTime: dropTime,
+        mode: 'overwrite',
+      });
+      executeCommand(command);
+      console.log(`[App] Added clip ${libraryClipId} to overlay track ${targetTrack.id} at time ${dropTime.toFixed(2)}s`);
+    }
   };
 
   /**
    * Handle reordering clip on timeline (with ripple move)
+   * Uses V2 command pattern for undo/redo support
    */
   const handleReorderClip = (dragIndex: number, hoverIndex: number) => {
-    setTimelineDoc(prevDoc => {
-      const updatedDoc = reorderClipInMainTrackMagnetic(dragIndex, hoverIndex, prevDoc, timeline);
-      console.log(`[App] Reordered clip from index ${dragIndex} to ${hoverIndex}`);
-      return updatedDoc;
+    const currentDoc = useTimelineStore.getState().timelineDoc;
+    const mainTrack = currentDoc.tracks.find(t => t.role === 'main');
+    
+    if (!mainTrack || dragIndex >= timeline.length || hoverIndex >= timeline.length) {
+      console.warn('[App] Invalid reorder indices');
+      return;
+    }
+
+    const clipId = timeline[dragIndex]?.id;
+    if (!clipId) {
+      console.warn('[App] Clip not found at drag index');
+      return;
+    }
+
+    // Use MoveCommand for undo/redo support
+    const command = new MoveCommand({
+      clipId,
+      targetTrackId: mainTrack.id,
+      targetIndex: hoverIndex,
+      mode: 'ripple',
     });
+    executeCommand(command);
+    console.log(`[App] Reordered clip from index ${dragIndex} to ${hoverIndex}`);
   };
 
   /**
    * Handle clip selection on timeline
    */
   const handleTimelineSelectClip = useCallback((clipId: string | null) => {
-    console.log(`[App] handleTimelineSelectClip called: clipId=${clipId}, current selectedClipId=${selectedClipId}, stack:`, new Error().stack);
+    console.log(`[App] handleTimelineSelectClip called: clipId=${clipId}, current selectedClipId=${selectedClipId}`);
     setSelectedClipId(clipId);
+    selectClip(clipId); // Also update store
     if (clipId) {
       console.log(`[App] Selected timeline clip: ${clipId}`);
     } else {
       console.log(`[App] Deselected clip`);
     }
-  }, [selectedClipId]);
+  }, [selectedClipId, selectClip]);
 
   /**
    * Handle deleting clip from timeline (with ripple delete)
+   * Uses V2 command pattern for undo/redo support
    */
   const handleDeleteClip = (clipId: string) => {
-    setTimelineDoc(prevDoc => {
-      const updatedDoc = removeClipFromMainTrackMagnetic(clipId, prevDoc, timeline);
-      
-      // Clear selection if deleted clip was selected
-      if (selectedClipId === clipId) {
-        setSelectedClipId(null);
-      }
-      console.log(`[App] Deleted clip ${clipId} from timeline`);
-      return updatedDoc;
+    // Use DeleteCommand for undo/redo support
+    const command = new DeleteCommand({
+      clipId,
+      mode: 'ripple',
     });
+    executeCommand(command);
+    
+    // Clear selection if deleted clip was selected
+    if (selectedClipId === clipId) {
+      setSelectedClipId(null);
+    }
+    console.log(`[App] Deleted clip ${clipId} from timeline`);
   };
 
   /**
@@ -297,24 +333,29 @@ const App: React.FC = () => {
    * Also removes the clip from timeline if it's being used there
    */
   const handleDeleteLibraryClip = (clipId: string) => {
-    setLibrary(prev => {
-      const newLibrary = prev.filter(clip => clip.id !== clipId);
-      console.log(`[App] Deleted clip ${clipId} from library. Library now has ${newLibrary.length} clip(s).`);
-      return newLibrary;
-    });
+    const currentLibrary = useTimelineStore.getState().library;
+    const newLibrary = currentLibrary.filter(clip => clip.id !== clipId);
+    setLibrary(newLibrary);
+    console.log(`[App] Deleted clip ${clipId} from library. Library now has ${newLibrary.length} clip(s).`);
 
     // Also remove from timeline if it's being used there
-    setTimelineDoc(prevDoc => {
-      const updatedDoc = removeClipFromMainTrackMagnetic(clipId, prevDoc, timeline);
-      if (updatedDoc !== prevDoc) {
-        console.log(`[App] Also removed clip ${clipId} from timeline`);
-      }
-      return updatedDoc;
-    });
+    const currentDoc = useTimelineStore.getState().timelineDoc;
+    const clips = extractMainTrackClips(currentDoc);
+    const clipInTimeline = clips.find(c => c.id === clipId);
+    
+    if (clipInTimeline) {
+      const command = new DeleteCommand({
+        clipId,
+        mode: 'ripple',
+      });
+      executeCommand(command);
+      console.log(`[App] Also removed clip ${clipId} from timeline`);
+    }
 
     // Clear selection if deleted clip was selected
     if (selectedClipId === clipId) {
       setSelectedClipId(null);
+      selectClip(null);
     }
   };
 
@@ -330,55 +371,57 @@ const App: React.FC = () => {
 
   /**
    * Handle trim update with ripple behavior
+   * Uses V2 command pattern for undo/redo support
    */
   const handleTrimUpdate = (clipId: string, trimStart: number, trimEnd: number) => {
-    setTimelineDoc(prevDoc => {
-      if (!prevDoc || prevDoc.tracks.length === 0) {
-        // Fallback to timeline array if timelineDoc not initialized
-        console.warn('[App] TimelineDoc not initialized, using timeline array for trim');
-        const migrated = migrateToMultitrack(timeline);
-        setTimelineDoc(migrated);
-        // Retry with migrated doc
-        return trimClipInMainTrackMagnetic(clipId, trimStart, trimEnd, migrated, timeline, library, 'ripple');
-      }
-      
-      // Get current clips from main track - these are the source of truth
-      const currentClips = extractMainTrackClips(prevDoc);
-      const updatedDoc = trimClipInMainTrackMagnetic(
+    const currentDoc = useTimelineStore.getState().timelineDoc;
+    
+    if (currentDoc.tracks.length === 0) {
+      // Fallback to timeline array if timelineDoc not initialized
+      console.warn('[App] TimelineDoc not initialized, migrating for trim');
+      const migrated = migrateToMultitrack(timeline);
+      setTimelineDoc(migrated);
+      // Retry with migrated doc
+      const command = new TrimCommand({
         clipId,
-        trimStart,
-        trimEnd,
-        prevDoc,
-        currentClips,
-        library,
-        'ripple'
-      );
-      console.log(`[App] Updated trim for clip ${clipId}: trimStart=${trimStart.toFixed(2)}s, trimEnd=${trimEnd.toFixed(2)}s`);
-      return updatedDoc;
+        newTrimStart: trimStart,
+        newTrimEnd: trimEnd,
+        mode: 'ripple',
+      });
+      executeCommand(command);
+      return;
+    }
+    
+    // Use TrimCommand for undo/redo support
+    const command = new TrimCommand({
+      clipId,
+      newTrimStart: trimStart,
+      newTrimEnd: trimEnd,
+      mode: 'ripple',
     });
+    executeCommand(command);
+    console.log(`[App] Updated trim for clip ${clipId}: trimStart=${trimStart.toFixed(2)}s, trimEnd=${trimEnd.toFixed(2)}s`);
   };
 
   /**
    * Handle creating a new overlay track
    */
   const handleCreateOverlayTrack = () => {
-    setTimelineDoc(prevDoc => {
-      if (!prevDoc) {
-        const newDoc = migrateToMultitrack(timeline);
-        const updatedDoc = addOverlayTrack(newDoc);
-        // Set new track as active
-        const newTrack = updatedDoc.tracks[updatedDoc.tracks.length - 1];
-        setActiveTrackId(newTrack.id);
-        return updatedDoc;
-      }
-      
-      const updatedDoc = addOverlayTrack(prevDoc);
-      // Set new track as active
-      const newTrack = updatedDoc.tracks[updatedDoc.tracks.length - 1];
-      setActiveTrackId(newTrack.id);
-      console.log(`[App] Created new overlay track: ${newTrack.id}`);
-      return updatedDoc;
-    });
+    const currentDoc = useTimelineStore.getState().timelineDoc;
+    let doc = currentDoc;
+    
+    if (doc.tracks.length === 0) {
+      doc = migrateToMultitrack(timeline);
+      setTimelineDoc(doc);
+    }
+    
+    const updatedDoc = addOverlayTrack(doc);
+    setTimelineDoc(updatedDoc);
+    
+    // Set new track as active
+    const newTrack = updatedDoc.tracks[updatedDoc.tracks.length - 1];
+    setActiveTrackId(newTrack.id);
+    console.log(`[App] Created new overlay track: ${newTrack.id}`);
   };
 
   /**
@@ -390,7 +433,33 @@ const App: React.FC = () => {
   };
 
   /**
+   * Handle moving overlay clip to new position (with absolute time positioning)
+   * Uses V2 command pattern for undo/redo support
+   */
+  const handleMoveOverlayClip = (clipId: string, targetTrackId: string, targetTime: number) => {
+    const currentDoc = useTimelineStore.getState().timelineDoc;
+    const targetTrack = currentDoc.tracks.find(t => t.id === targetTrackId);
+
+    if (!targetTrack) {
+      console.warn('[App] Target track not found for overlay move');
+      return;
+    }
+
+    // Use MoveCommand for undo/redo support
+    const command = new MoveCommand({
+      clipId,
+      targetTrackId,
+      targetLaneId: targetTrack.lanes[0]?.id,
+      targetTime,
+      mode: 'overwrite',
+    });
+    executeCommand(command);
+    console.log(`[App] Moved overlay clip ${clipId} to track ${targetTrackId} at time ${targetTime.toFixed(2)}s`);
+  };
+
+  /**
    * Handle splitting a clip at the current playhead position (with magnetic behavior)
+   * Uses V2 command pattern for undo/redo support
    */
   const handleSplitClip = () => {
     const clipToSplit = getClipAtPlayhead();
@@ -399,21 +468,13 @@ const App: React.FC = () => {
       return;
     }
 
-    setTimelineDoc(prevDoc => {
-      const updatedDoc = splitClipInMainTrackMagnetic(
-        clipToSplit.id,
-        currentPlayheadPosition,
-        prevDoc,
-        timeline,
-        library
-      );
-      
-      const mainTrackClips = extractMainTrackClips(updatedDoc);
-      if (mainTrackClips.length > timeline.length) {
-        console.log(`[App] Split clip ${clipToSplit.id} at ${currentPlayheadPosition.toFixed(2)}s`);
-      }
-      return updatedDoc;
+    // Use SplitCommand for undo/redo support
+    const command = new SplitCommand({
+      clipId: clipToSplit.id,
+      splitTime: currentPlayheadPosition,
     });
+    executeCommand(command);
+    console.log(`[App] Split clip ${clipToSplit.id} at ${currentPlayheadPosition.toFixed(2)}s`);
   };
 
   /**
@@ -487,18 +548,23 @@ const App: React.FC = () => {
     setLibrary(restoredState.library);
     setTimeline(restoredState.timeline);
     
-    // Restore other state
-    setTimelineZoom(restoredState.timelineZoom);
-    setTimelineScrollPosition(restoredState.timelineScrollPosition);
+    // Restore timelineDoc from timeline
+    const restoredDoc = migrateToMultitrack(restoredState.timeline);
+    setTimelineDoc(restoredDoc);
+    
+    // Restore other state (update store)
+    setZoom(restoredState.timelineZoom);
+    setScrollPosition(restoredState.timelineScrollPosition);
     
     // Restore selected clip (this triggers video loading)
     setSelectedClipId(restoredState.selectedClipId);
+    selectClip(restoredState.selectedClipId);
     
     // Restore playhead position LAST (after clips are loaded)
     // Use setTimeout to ensure clips have time to load first
     setTimeout(() => {
       console.log('[App] Setting restored playhead position:', restoredState.currentPlayheadPosition);
-      setCurrentPlayheadPosition(restoredState.currentPlayheadPosition);
+      setPlayheadPosition(restoredState.currentPlayheadPosition);
     }, 100);
     
     console.log('[App] State restored from autosave');
@@ -583,6 +649,11 @@ const App: React.FC = () => {
 
       const target = e.target as Node;
       
+      // Don't deselect if clicking inside the Library component
+      if (libraryRef.current && libraryRef.current.contains(target)) {
+        return;
+      }
+      
       // Check if click is outside timeline
       if (timelineRef.current && !timelineRef.current.contains(target)) {
         console.log('[App] Clicked outside timeline, deselecting clip');
@@ -616,6 +687,30 @@ const App: React.FC = () => {
       console.error('[App] File import error:', err);
     }
   }, [importFiles]);
+
+  // Handle export handler ready from VideoPlayer
+  const handleExportHandlerReady = useCallback((handler: () => void) => {
+    setExportHandler(() => handler);
+  }, []);
+
+  // Handle export from toolbar
+  const handleToolbarExport = useCallback(() => {
+    if (exportHandler) {
+      exportHandler();
+    }
+  }, [exportHandler]);
+
+  // Handle play/pause handler ready from VideoPlayer
+  const handlePlayPauseHandlerReady = useCallback((handler: () => void) => {
+    setPlayPauseHandler(() => handler);
+  }, []);
+
+  // Handle play/pause from toolbar
+  const handleToolbarPlayPause = useCallback(() => {
+    if (playPauseHandler) {
+      playPauseHandler();
+    }
+  }, [playPauseHandler]);
 
   const handleSelectScreenRecording = useCallback(() => {
     setShowRecordingTypeModal(false);
@@ -662,7 +757,8 @@ const App: React.FC = () => {
         recordedAt: now,
       };
       
-      setLibrary(prev => [newClip, ...prev]);
+          const currentLibrary = useTimelineStore.getState().library;
+          setLibrary([newClip, ...currentLibrary]);
       console.log('[App] Webcam recording added to library:', newClip.filename);
     } catch (err) {
       console.error('[App] Failed to add webcam recording to library:', err);
@@ -878,7 +974,12 @@ const App: React.FC = () => {
             recordedAt: now,
           };
           
-          setLibrary(prev => [newClip, ...prev]);
+        const importedClips = await importFiles(filePaths);
+        if (importedClips.length > 0) {
+          const currentLibrary = useTimelineStore.getState().library;
+          setLibrary([...importedClips, ...currentLibrary]);
+          console.log(`[App] Imported ${importedClips.length} clip(s) via toolbar.`);
+        }
           setRecordingSessionId(null);
           setRecordingScreenSourceId(null);
           setRecordingOutputPath(null);
@@ -913,8 +1014,10 @@ const App: React.FC = () => {
       {/* Toolbar */}
       <Toolbar 
         onAddFiles={handleToolbarAddFiles}
-        onExport={() => {/* Handle export via VideoPlayer */}}
+        onExport={handleToolbarExport}
         onRecord={handleRecordClick}
+        onPlayPause={handleToolbarPlayPause}
+        isPlaying={isPlaying}
       />
       
       {/* Auto-save status bar (below toolbar) */}
@@ -926,26 +1029,41 @@ const App: React.FC = () => {
       {/* Top section: Library + VideoPlayer - constrained to 50% height */}
       <div className="flex overflow-hidden" style={{ height: lastSavedTime ? 'calc(50% - 22px)' : '50%', maxHeight: lastSavedTime ? 'calc(50vh - 22px)' : '50vh' }}>
         <Library 
+          ref={libraryRef}
           library={library}
           onImportComplete={handleImportComplete}
           onSelectClip={handleSelectClip}
           selectedClipId={selectedClipId}
           onDeleteClip={handleDeleteLibraryClip}
         />
-        <VideoPlayer
-          selectedClipId={selectedClipId}
-          library={library}
-          timeline={timeline}
-          currentPlayheadPosition={currentPlayheadPosition}
-          onPlayheadChange={setCurrentPlayheadPosition}
-          isPlaying={isPlaying}
-          onPlayingChange={setIsPlaying}
-          onSelectClip={handleTimelineSelectClip}
-          onBeforeExport={handleBeforeExport}
-          onRecordClick={handleRecordClick}
-          isRecording={!!recordingSessionId}
-          isProcessingRecording={isProcessingRecording}
-        />
+        {/* Conditional rendering: MultitrackPreviewPlayer if overlay tracks exist, otherwise VideoPlayer */}
+        {timelineDoc.tracks.some(t => t.role === 'overlay' && t.lanes[0]?.clips.length > 0) ? (
+          <MultitrackPreviewPlayer
+            timelineDoc={timelineDoc}
+            library={library}
+            currentPlayheadPosition={currentPlayheadPosition}
+            onPlayheadChange={setPlayheadPosition}
+            isPlaying={isPlaying}
+            onPlayingChange={setIsPlaying}
+            onBeforeExport={handleBeforeExport}
+            onExportHandlerReady={handleExportHandlerReady}
+            onPlayPauseHandlerReady={handlePlayPauseHandlerReady}
+          />
+        ) : (
+          <VideoPlayer
+            selectedClipId={selectedClipId}
+            library={library}
+            timeline={timeline}
+            currentPlayheadPosition={currentPlayheadPosition}
+            onPlayheadChange={setPlayheadPosition}
+            isPlaying={isPlaying}
+            onPlayingChange={setIsPlaying}
+            onSelectClip={handleTimelineSelectClip}
+            onBeforeExport={handleBeforeExport}
+            onExportHandlerReady={handleExportHandlerReady}
+            onPlayPauseHandlerReady={handlePlayPauseHandlerReady}
+          />
+        )}
         {recordingSessionId && (
           <RecordingIndicator
             elapsedSeconds={recordingElapsedSeconds}
@@ -1014,13 +1132,14 @@ const App: React.FC = () => {
           onSelectClip={handleTimelineSelectClip}
           onDeleteClip={handleDeleteClip}
           onClearAll={handleClearAll}
-          onZoomChange={setTimelineZoom}
-          onScrollChange={setTimelineScrollPosition}
-          onPlayheadChange={setCurrentPlayheadPosition}
+          onZoomChange={setZoom}
+          onScrollChange={setScrollPosition}
+          onPlayheadChange={setPlayheadPosition}
           onTrimUpdate={handleTrimUpdate}
           onSplitClip={handleSplitClip}
           onCreateOverlayTrack={handleCreateOverlayTrack}
           onSelectTrack={handleSelectTrack}
+          onMoveOverlayClip={handleMoveOverlayClip}
           isPlayheadOverClip={isPlayheadOverClip()}
           timelineContainerRefCallback={(ref) => { timelineContainerRef.current = ref.current; }}
         />
@@ -1029,7 +1148,7 @@ const App: React.FC = () => {
         <div className="flex-shrink-0 px-4 py-2 border-t border-[#333333] bg-[#2a2a2a]">
           <TimelineZoomControls
             zoom={timelineZoom}
-            onZoomChange={setTimelineZoom}
+            onZoomChange={setZoom}
             timeline={timeline}
             library={library}
             timelineContainerRef={timelineContainerRef}

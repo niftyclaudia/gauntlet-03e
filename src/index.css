@@ -1015,7 +1015,7 @@ body {
   position: relative; /* For absolute positioning of playhead */
   cursor: default;
   margin-top: 0; /* Removed to work within column structure */
-  padding-top: 46px; /* Space for playhead to extend into ruler area (40px ruler + 6px gap) */
+  padding-top: 60px; /* Space for playhead to extend into ruler area (40px ruler + 6px gap) */
 }
 
 .timeline-container.timeline-drag-over {
@@ -2017,64 +2017,6 @@ body {
   color: #999999;
   font-size: 12px;
   margin: 8px 0 0 0;
-}
-
-/* Recording Button Styles */
-.record-screen-button {
-  background-color: #ff4444;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: background-color 0.2s ease;
-}
-
-.record-screen-button:hover:not(:disabled) {
-  background-color: #e03e3e;
-}
-
-.record-screen-button:disabled {
-  background-color: #666666;
-  cursor: not-allowed;
-}
-
-.record-screen-icon {
-  font-size: 12px;
-}
-
-/* Unified Record Button Styles */
-.record-button {
-  background-color: #ff4444;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 16px;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  transition: background-color 0.2s ease;
-}
-
-.record-button:hover:not(:disabled) {
-  background-color: #e03e3e;
-}
-
-.record-button:disabled {
-  background-color: #666666;
-  cursor: not-allowed;
-}
-
-.record-icon {
-  font-size: 12px;
 }
 
 /* Recording Type Modal Styles */

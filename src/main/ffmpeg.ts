@@ -9,6 +9,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { VideoMetadata, TimelineClip, VideoClip, ExportSettings, ExportParams } from '../types/video';
+import { TimelineDoc } from '../types/timeline';
 import { getThumbnailDirectory } from './fileSystem';
 
 // Import ffmpeg-static with require for better compatibility
@@ -499,13 +500,512 @@ export function cleanupTempFiles(filePaths: string[]): void {
 }
 
 /**
+ * Check if a video file has an audio stream
+ */
+async function hasAudioStream(filePath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!ffmpegPath) {
+      resolve(false);
+      return;
+    }
+
+    const ffmpeg = spawn(ffmpegPath, ['-i', filePath]);
+    let stderr = '';
+
+    ffmpeg.stderr.on('data', (data) => {
+      stderr += data.toString();
+    });
+
+    ffmpeg.on('close', () => {
+      // Check if there's an audio stream in the output
+      // Look for "Stream #X:Y: Audio:" pattern
+      const audioStreamMatch = stderr.match(/Stream #\d+:\d+.*Audio:/);
+      resolve(!!audioStreamMatch);
+    });
+
+    ffmpeg.on('error', () => {
+      resolve(false);
+    });
+  });
+}
+
+/**
+ * Generate FFmpeg command for composite export with overlay tracks
+ * Uses filter_complex to overlay overlay tracks on main track
+ */
+export function generateCompositeExportCommand(
+  mainVideoPath: string,
+  overlaySegments: Array<{ path: string; startTime: number; duration: number; hasAudio: boolean }>,
+  outputPath: string,
+  settings: ExportSettings,
+  mainHasAudio: boolean = true // Default to true for backward compatibility
+): string[] {
+  const { framerate, videoBitrate, audioBitrate } = settings;
+  const videoBitrateKbps = Math.round(videoBitrate * 1000);
+  
+  // Build filter_complex for overlaying
+  const filterParts: string[] = [];
+  
+  // Main video input - start with main video
+  let currentVideoLabel = '[0:v]';
+  
+  // For each overlay segment, add overlay filter (chain them together)
+  overlaySegments.forEach((overlay, index) => {
+    const inputIndex = index + 1; // Overlay inputs start at [1:v]
+    const outputLabel = index === overlaySegments.length - 1 ? '[vout]' : `[v${index}]`;
+    
+    // Scale overlay to 25% size (PiP style)
+    filterParts.push(`[${inputIndex}:v]scale=iw*0.25:ih*0.25[overlay${index}_scaled]`);
+    
+    // Calculate position (bottom-right by default)
+    const overlayX = 'main_w-overlay_w-10';
+    const overlayY = 'main_h-overlay_h-10';
+    
+    // Overlay at specific time - chain overlays sequentially
+    // FFmpeg overlay filter with enable expression to show only during specific time range
+    const startTime = overlay.startTime;
+    const endTime = overlay.startTime + overlay.duration;
+    
+    // Build overlay filter with enable expression
+    // Format: [base][overlay]overlay=x:y:enable='between(t,start,end)'
+    // Note: Single quotes are preserved when passed to FFmpeg via spawn
+    const overlayFilter = `${currentVideoLabel}[overlay${index}_scaled]overlay=${overlayX}:${overlayY}:enable='between(t,${startTime},${endTime})'${outputLabel}`;
+    filterParts.push(overlayFilter);
+    
+    // Next overlay will be applied to this result
+    currentVideoLabel = outputLabel;
+  });
+  
+  // If no overlays, just pass through main video
+  if (overlaySegments.length === 0) {
+    filterParts.push(`[0:v]copy[vout]`);
+  }
+  
+  // Build audio mix filter - handle optional audio tracks
+  // FFmpeg doesn't support ? in filter expressions
+  // Only include audio streams that actually exist (hasAudio flag tells us)
+  const hasAnyAudio = mainHasAudio || overlaySegments.some(seg => seg.hasAudio);
+  
+  console.log(`[FFmpeg] Audio detection: mainHasAudio=${mainHasAudio}, overlaySegments with audio:`, 
+    overlaySegments.map((seg, i) => ({ index: i + 1, hasAudio: seg.hasAudio }))
+  );
+  
+  if (hasAnyAudio) {
+    // Build audio inputs - only include streams that have audio
+    const audioStreams: number[] = [];
+    
+    // Add main audio if it exists
+    if (mainHasAudio) {
+      audioStreams.push(0);
+      console.log(`[FFmpeg] Including main audio stream [0:a]`);
+    }
+    
+    // Add overlay audio streams that exist
+    overlaySegments.forEach((seg, i) => {
+      if (seg.hasAudio) {
+        const streamIndex = i + 1; // Overlay inputs start at 1
+        audioStreams.push(streamIndex);
+        console.log(`[FFmpeg] Including overlay audio stream [${streamIndex}:a] from overlay segment ${i + 1}`);
+      } else {
+        console.log(`[FFmpeg] Skipping audio for overlay segment ${i + 1} (no audio stream)`);
+      }
+    });
+    
+    console.log(`[FFmpeg] Total audio streams to mix: ${audioStreams.length}`, audioStreams);
+    
+    if (audioStreams.length > 1) {
+      // Multiple audio streams - use amix
+      let audioInputs = '';
+      audioStreams.forEach(streamIndex => {
+        audioInputs += `[${streamIndex}:a]`;
+      });
+      const amixFilter = `${audioInputs}amix=inputs=${audioStreams.length}:duration=longest:dropout_transition=0[aout]`;
+      console.log(`[FFmpeg] Creating amix filter: ${amixFilter}`);
+      filterParts.push(amixFilter);
+    } else if (audioStreams.length === 1) {
+      // Single audio stream - pass it through with anull filter
+      const anullFilter = `[${audioStreams[0]}:a]anull[aout]`;
+      console.log(`[FFmpeg] Creating anull filter: ${anullFilter}`);
+      filterParts.push(anullFilter);
+    } else {
+      // No audio streams found - this shouldn't happen if hasAnyAudio is true
+      console.warn(`[FFmpeg] WARNING: hasAnyAudio is true but no audio streams found! Skipping audio.`);
+    }
+  } else {
+    console.log(`[FFmpeg] No audio streams found - skipping audio processing entirely`);
+  }
+  
+  const filterComplex = filterParts.join(';');
+  
+  // Debug logging
+  console.log(`[FFmpeg] Filter complex: ${filterComplex}`);
+  console.log(`[FFmpeg] Main video has audio: ${mainHasAudio}`);
+  overlaySegments.forEach((overlay, i) => {
+    console.log(`[FFmpeg] Overlay segment ${i + 1}: path=${overlay.path}, startTime=${overlay.startTime}, duration=${overlay.duration}, hasAudio=${overlay.hasAudio}`);
+  });
+  
+  // Build command
+  const args = ['-i', mainVideoPath];
+  
+  // Add overlay inputs
+  overlaySegments.forEach(overlay => {
+    args.push('-i', overlay.path);
+  });
+  
+  args.push(
+    '-filter_complex', filterComplex,
+    '-map', '[vout]'
+  );
+  
+  // Only map audio if we have audio output
+  if (hasAnyAudio) {
+    args.push('-map', '[aout]');
+  }
+  
+  args.push(
+    '-c:v', 'libx264',
+    '-preset', 'medium',
+    '-crf', '23',
+    '-r', framerate.toString(),
+    '-b:v', `${videoBitrateKbps}k`,
+    '-maxrate', `${videoBitrateKbps}k`,
+    '-bufsize', `${videoBitrateKbps * 2}k`
+  );
+  
+  // Only add audio codec if we have audio
+  if (hasAnyAudio) {
+    args.push(
+      '-c:a', 'aac',
+      '-b:a', `${audioBitrate}k`
+    );
+  }
+  
+  args.push(
+    '-pix_fmt', 'yuv420p',
+    '-movflags', '+faststart',
+    '-y',
+    outputPath
+  );
+  
+  return args;
+}
+
+/**
+ * Export main track only (helper function to avoid recursion)
+ */
+async function exportMainTrackOnly(
+  clips: TimelineClip[],
+  libraryClips: VideoClip[],
+  outputPath: string,
+  settings: ExportSettings,
+  onProgress?: (progress: number) => void
+): Promise<void> {
+  const tempFiles: string[] = [];
+  try {
+    const sortedClips = [...clips].sort((a, b) => a.order - b.order);
+    if (sortedClips.length === 0) throw new Error('Cannot export: timeline is empty');
+    for (const clip of sortedClips) {
+      const libraryClip = libraryClips.find(lc => lc.id === clip.libraryClipId);
+      if (!libraryClip) throw new Error(`Library clip not found for timeline clip ${clip.id}`);
+      if (!fs.existsSync(libraryClip.path)) throw new Error(`Source file not found: ${libraryClip.path}`);
+    }
+    const trimmedSegments: string[] = [];
+    const trimProgressWeight = 0.1;
+    onProgress?.(0);
+    console.log(`[FFmpeg] Starting export with ${sortedClips.length} clip(s)`);
+    for (let i = 0; i < sortedClips.length; i++) {
+      const clip = sortedClips[i];
+      const libraryClip = libraryClips.find(lc => lc.id === clip.libraryClipId)!;
+      const tempDir = os.tmpdir();
+      const segmentPath = path.join(tempDir, `ollo_segment_${i}_${clip.id}_${Date.now()}.mp4`);
+      tempFiles.push(segmentPath);
+      console.log(`[FFmpeg] Processing clip ${i + 1}/${sortedClips.length}: ${libraryClip.filename}`);
+      console.log(`[FFmpeg] Trim: ${clip.trimStart.toFixed(2)}s to ${clip.trimEnd.toFixed(2)}s, segment: ${segmentPath}`);
+      const trimCommand = generateTrimCommand(
+        libraryClip.path,
+        clip.trimStart,
+        clip.trimEnd,
+        segmentPath,
+        settings
+      );
+      await executeFFmpegCommand(trimCommand, clip.trimEnd - clip.trimStart);
+      if (!fs.existsSync(segmentPath)) {
+        throw new Error(`Failed to create trimmed segment: ${segmentPath}`);
+      }
+      const segmentSize = fs.statSync(segmentPath).size;
+      console.log(`[FFmpeg] Segment ${i + 1} created: ${segmentPath} (${segmentSize} bytes)`);
+      trimmedSegments.push(segmentPath);
+      const trimProgress = ((i + 1) / sortedClips.length) * trimProgressWeight * 100;
+      onProgress?.(trimProgress);
+    }
+    console.log(`[FFmpeg] All ${trimmedSegments.length} segments created, creating concat list...`);
+    const concatListPath = createConcatList(trimmedSegments);
+    tempFiles.push(concatListPath);
+    const concatListContent = fs.readFileSync(concatListPath, 'utf8');
+    console.log(`[FFmpeg] Concat list contents:\n${concatListContent}`);
+    onProgress?.(trimProgressWeight * 100 + 5);
+    const concatCommand = generateConcatCommand(concatListPath, outputPath, settings);
+    const totalDuration = sortedClips.reduce((sum, clip) => sum + (clip.trimEnd - clip.trimStart), 0);
+    let concatProgressStart = trimProgressWeight * 100 + 5;
+    await executeFFmpegCommand(concatCommand, totalDuration, (progress) => {
+      const mappedProgress = concatProgressStart + (progress * (100 - concatProgressStart) / 100);
+      onProgress?.(mappedProgress);
+    });
+    onProgress?.(100);
+    console.log(`[FFmpeg] Export completed: ${outputPath}`);
+  } catch (error) {
+    cleanupTempFiles(tempFiles);
+    throw error;
+  } finally {
+    cleanupTempFiles(tempFiles);
+  }
+}
+
+/**
+ * Export video sequence with overlay tracks
+ */
+async function exportVideoSequenceWithOverlays(
+  timelineDoc: TimelineDoc,
+  libraryClips: VideoClip[],
+  outputPath: string,
+  settings: ExportSettings,
+  onProgress?: (progress: number) => void
+): Promise<void> {
+  const tempFiles: string[] = [];
+  
+  console.log(`[FFmpeg] exportVideoSequenceWithOverlays called with timelineDoc:`, {
+    totalTracks: timelineDoc.tracks.length,
+    trackRoles: timelineDoc.tracks.map(t => ({ id: t.id, role: t.role, clips: t.lanes[0]?.clips.length || 0 }))
+  });
+  
+  try {
+    // Extract main track and overlay tracks
+    const mainTrack = timelineDoc.tracks.find(t => t.role === 'main');
+    const overlayTracks = timelineDoc.tracks.filter(t => t.role === 'overlay');
+    
+    console.log(`[FFmpeg] Main track:`, mainTrack ? { id: mainTrack.id, clips: mainTrack.lanes[0]?.clips.length || 0 } : 'NOT FOUND');
+    console.log(`[FFmpeg] Overlay tracks:`, overlayTracks.length, overlayTracks.map(t => ({ id: t.id, clips: t.lanes[0]?.clips.length || 0 })));
+    
+    if (!mainTrack || mainTrack.lanes[0].clips.length === 0) {
+      throw new Error('Cannot export: main track is empty');
+    }
+    
+    const mainClips = mainTrack.lanes[0].clips.sort((a, b) => (a.order || 0) - (b.order || 0));
+    
+    // Step 1: Export main track to intermediate file
+    onProgress?.(0);
+    console.log(`[FFmpeg] Exporting main track with ${mainClips.length} clip(s)`);
+    
+    const tempDir = os.tmpdir();
+    const mainVideoPath = path.join(tempDir, `ollo_main_${Date.now()}.mp4`);
+    tempFiles.push(mainVideoPath);
+    
+    // Export main track using helper function (not recursive call)
+    await exportMainTrackOnly(
+      mainClips,
+      libraryClips,
+      mainVideoPath,
+      settings,
+      (progress) => {
+        // Scale main track export to 40% of total progress
+        onProgress?.(progress * 0.4);
+      }
+    );
+    
+    // Step 2: Process overlay tracks
+    const overlaySegments: Array<{ path: string; startTime: number; duration: number; hasAudio: boolean }> = [];
+    
+    if (overlayTracks.length > 0) {
+      console.log(`[FFmpeg] Processing ${overlayTracks.length} overlay track(s)`);
+      
+      // Process each overlay track (for now, only process first overlay track)
+      const overlayTrack = overlayTracks[0];
+      const overlayClips = overlayTrack.lanes[0]?.clips || [];
+      
+      console.log(`[FFmpeg] Found ${overlayClips.length} overlay clip(s) in first overlay track`);
+      
+      for (let i = 0; i < overlayClips.length; i++) {
+        const clip = overlayClips[i];
+        console.log(`[FFmpeg] Processing overlay clip ${i + 1}/${overlayClips.length}:`, {
+          clipId: clip.id,
+          libraryClipId: clip.libraryClipId,
+          start: clip.start,
+          trimStart: clip.trimStart,
+          trimEnd: clip.trimEnd,
+        });
+        
+        const libraryClip = libraryClips.find(lc => lc.id === clip.libraryClipId);
+        
+        if (!libraryClip) {
+          console.warn(`[FFmpeg] Library clip not found for overlay clip ${clip.id}, skipping`);
+          continue;
+        }
+        
+        if (!fs.existsSync(libraryClip.path)) {
+          console.warn(`[FFmpeg] Source file not found for overlay clip: ${libraryClip.path}, skipping`);
+          continue;
+        }
+        
+        // Calculate overlay position (clip.start is absolute time in timeline)
+        const overlayStartTime = clip.start ?? 0;
+        const overlayDuration = clip.trimEnd - clip.trimStart;
+        
+        console.log(`[FFmpeg] Overlay clip ${i + 1} details:`, {
+          startTime: overlayStartTime,
+          duration: overlayDuration,
+          sourcePath: libraryClip.path,
+        });
+        
+        // Create trimmed segment for overlay
+        const overlaySegmentPath = path.join(tempDir, `ollo_overlay_${i}_${clip.id}_${Date.now()}.mp4`);
+        tempFiles.push(overlaySegmentPath);
+        
+        console.log(`[FFmpeg] Processing overlay clip ${i + 1}/${overlayClips.length}: ${libraryClip.filename}`);
+        console.log(`[FFmpeg] Overlay at time ${overlayStartTime.toFixed(2)}s, duration ${overlayDuration.toFixed(2)}s`);
+        
+        const trimCommand = generateTrimCommand(
+          libraryClip.path,
+          clip.trimStart,
+          clip.trimEnd,
+          overlaySegmentPath,
+          settings
+        );
+        
+        await executeFFmpegCommand(trimCommand, overlayDuration);
+        
+        // Verify segment file exists and is valid before checking audio
+        if (!fs.existsSync(overlaySegmentPath)) {
+          throw new Error(`Overlay segment ${i + 1} was not created: ${overlaySegmentPath}`);
+        }
+        
+        const segmentStats = fs.statSync(overlaySegmentPath);
+        if (segmentStats.size === 0) {
+          throw new Error(`Overlay segment ${i + 1} is empty: ${overlaySegmentPath}`);
+        }
+        
+        // Check if overlay segment has audio by probing the file
+        // Wait a brief moment to ensure file is fully flushed to disk
+        await new Promise(resolve => setTimeout(resolve, 100));
+        console.log(`[FFmpeg] Checking audio for overlay segment ${i + 1} (${segmentStats.size} bytes)...`);
+        const hasAudio = await hasAudioStream(overlaySegmentPath);
+        console.log(`[FFmpeg] Overlay segment ${i + 1} has audio: ${hasAudio}`);
+        
+        overlaySegments.push({
+          path: overlaySegmentPath,
+          startTime: overlayStartTime,
+          duration: overlayDuration,
+          hasAudio, // Set based on actual probe result
+        });
+      }
+    }
+    
+    // Step 3: Composite main + overlays
+    if (overlaySegments.length > 0) {
+      console.log(`[FFmpeg] Compositing ${overlaySegments.length} overlay segment(s) onto main track`);
+      onProgress?.(40);
+      
+          // Re-check audio streams right before compositing to ensure accuracy
+      console.log(`[FFmpeg] Re-validating audio streams before compositing...`);
+      
+      // Verify main video file exists and is valid
+      if (!fs.existsSync(mainVideoPath)) {
+        throw new Error(`Main video file does not exist: ${mainVideoPath}`);
+      }
+      const mainStats = fs.statSync(mainVideoPath);
+      if (mainStats.size === 0) {
+        throw new Error(`Main video file is empty: ${mainVideoPath}`);
+      }
+      
+      const mainHasAudio = await hasAudioStream(mainVideoPath);
+      console.log(`[FFmpeg] Main video has audio: ${mainHasAudio}`);
+      
+      // Re-check each overlay segment's audio status and verify files exist
+      for (let i = 0; i < overlaySegments.length; i++) {
+        const seg = overlaySegments[i];
+        
+        // Verify file exists
+        if (!fs.existsSync(seg.path)) {
+          throw new Error(`Overlay segment ${i + 1} file does not exist: ${seg.path}`);
+        }
+        
+        const segStats = fs.statSync(seg.path);
+        if (segStats.size === 0) {
+          throw new Error(`Overlay segment ${i + 1} file is empty: ${seg.path}`);
+        }
+        
+        // Re-check audio status
+        const actualHasAudio = await hasAudioStream(seg.path);
+        if (actualHasAudio !== seg.hasAudio) {
+          console.warn(`[FFmpeg] Audio status mismatch for overlay segment ${i + 1}: was ${seg.hasAudio}, actual ${actualHasAudio}. Updating...`);
+          seg.hasAudio = actualHasAudio;
+        }
+        console.log(`[FFmpeg] Overlay segment ${i + 1}: path=${seg.path}, size=${segStats.size} bytes, hasAudio=${seg.hasAudio}`);
+      }
+      
+      const compositeCommand = generateCompositeExportCommand(
+        mainVideoPath,
+        overlaySegments,
+        outputPath,
+        settings,
+        mainHasAudio
+      );
+      
+      // Get main track duration
+      const mainDuration = mainClips.reduce((sum, clip) => sum + (clip.trimEnd - clip.trimStart), 0);
+      
+      await executeFFmpegCommand(compositeCommand, mainDuration, (progress) => {
+        // Scale composite to 60% of total progress (40% to 100%)
+        onProgress?.(40 + (progress * 0.6));
+      });
+    } else {
+      // No overlays, just copy main track
+      console.log(`[FFmpeg] No overlay tracks, copying main track to output`);
+      fs.copyFileSync(mainVideoPath, outputPath);
+      onProgress?.(100);
+    }
+    
+    console.log(`[FFmpeg] Export with overlays completed: ${outputPath}`);
+  } catch (error) {
+    cleanupTempFiles(tempFiles);
+    throw error;
+  } finally {
+    cleanupTempFiles(tempFiles);
+  }
+}
+
+/**
  * Export video sequence - main export orchestrator
  */
 export async function exportVideoSequence(
   params: ExportParams,
   onProgress?: (progress: number) => void
 ): Promise<void> {
+  console.log(`[FFmpeg] exportVideoSequence called:`, {
+    hasTimelineDoc: !!params.timelineDoc,
+    hasClips: !!params.clips && params.clips.length > 0,
+    clipsCount: params.clips?.length || 0,
+    libraryClipsCount: params.libraryClips.length
+  });
+  
+  // If timelineDoc is provided, use multitrack export
+  if (params.timelineDoc) {
+    console.log(`[FFmpeg] Using multitrack export with timelineDoc`);
+    return exportVideoSequenceWithOverlays(
+      params.timelineDoc,
+      params.libraryClips,
+      params.outputPath,
+      params.settings,
+      onProgress
+    );
+  }
+  
+  console.log(`[FFmpeg] Using legacy single-track export`);
+  
+  // Legacy single-track export
   const { clips, libraryClips, outputPath, settings } = params;
+  if (!clips || clips.length === 0) {
+    throw new Error('Cannot export: timeline is empty or no clips provided');
+  }
   const tempFiles: string[] = [];
   try {
     const sortedClips = [...clips].sort((a, b) => a.order - b.order);

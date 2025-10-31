@@ -6,6 +6,7 @@
 
 import { useState, useCallback } from 'react';
 import { TimelineClip, VideoClip, SavedProjectState, AdvancedExportSettings } from '../types/video';
+import { TimelineDoc } from '../types/timeline';
 
 export interface UseExportReturn {
   /** Whether export is in progress */
@@ -17,7 +18,7 @@ export interface UseExportReturn {
   /** Export output file path (set when export completes) */
   outputPath: string | null;
   /** Start export process */
-  startExport: (clips: TimelineClip[], libraryClips: VideoClip[], projectState?: SavedProjectState, advancedSettings?: AdvancedExportSettings) => Promise<void>;
+  startExport: (clips: TimelineClip[], libraryClips: VideoClip[], projectState?: SavedProjectState, advancedSettings?: AdvancedExportSettings, timelineDoc?: TimelineDoc) => Promise<void>;
   /** Reset export state */
   reset: () => void;
 }
@@ -54,9 +55,18 @@ export function useExport(): UseExportReturn {
     clips: TimelineClip[],
     libraryClips: VideoClip[],
     projectState?: SavedProjectState,
-    advancedSettings?: AdvancedExportSettings
+    advancedSettings?: AdvancedExportSettings,
+    timelineDoc?: TimelineDoc
   ): Promise<void> => {
     try {
+      console.log('[useExport] startExport called with:', {
+        clipsCount: clips.length,
+        libraryClipsCount: libraryClips.length,
+        hasTimelineDoc: !!timelineDoc,
+        timelineDocTracks: timelineDoc?.tracks?.length || 0,
+        overlayTracks: timelineDoc ? timelineDoc.tracks.filter(t => t.role === 'overlay').length : 0
+      });
+      
       // Validate inputs
       if (clips.length === 0) {
         throw new Error('Cannot export: timeline is empty');
@@ -90,8 +100,12 @@ export function useExport(): UseExportReturn {
       });
 
       try {
-        // Start export (pass projectState and advancedSettings)
-        await window.electron.exportVideo(clips, libraryClips, outputPath, projectState, advancedSettings);
+        console.log('[useExport] Calling window.electron.exportVideo with timelineDoc:', {
+          hasTimelineDoc: !!timelineDoc,
+          timelineDocTracks: timelineDoc?.tracks?.length || 0
+        });
+        // Start export (pass projectState, advancedSettings, and timelineDoc)
+        await window.electron.exportVideo(clips, libraryClips, outputPath, projectState, advancedSettings, timelineDoc);
 
         // Success - set output path
         setOutputPath(outputPath);

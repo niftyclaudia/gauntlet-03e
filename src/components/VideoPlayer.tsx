@@ -8,11 +8,9 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import { VideoClip, TimelineClip, SequenceItem } from '../types/video';
 import PlayerControls from './PlayerControls';
-import SequencePreviewButton from './SequencePreviewButton';
 import ExportProgressBar from './ExportProgressBar';
 import ExportDialog from './ExportDialog';
 import AdvancedExportDialog from './AdvancedExportDialog';
-import RecordButton from './RecordButton';
 import { useExport } from '../hooks/useExport';
 import {
   calculateSequence,
@@ -40,12 +38,10 @@ interface VideoPlayerProps {
   onSelectClip?: (clipId: string | null) => void;
   /** Callback to get project state for auto-save before export */
   onBeforeExport?: () => Promise<any>;
-  /** Callback when record button is clicked */
-  onRecordClick?: () => void;
-  /** Whether recording is currently active */
-  isRecording?: boolean;
-  /** Whether recording is being processed */
-  isProcessingRecording?: boolean;
+  /** Callback to expose export handler for external use (e.g., toolbar) */
+  onExportHandlerReady?: (handler: () => void) => void;
+  /** Callback to expose play/pause handler for external use (e.g., toolbar) */
+  onPlayPauseHandlerReady?: (handler: () => void) => void;
 }
 
 const VideoPlayer: React.FC<VideoPlayerProps> = ({
@@ -58,9 +54,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   onPlayingChange,
   onSelectClip,
   onBeforeExport,
-  onRecordClick,
-  isRecording = false,
-  isProcessingRecording = false,
+  onExportHandlerReady,
+  onPlayPauseHandlerReady,
 }) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [playerState, setPlayerState] = useState<{
@@ -123,6 +118,15 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     
     setShowAdvancedExportDialog(true);
   }, [timeline.length, exportHook.isExporting]);
+
+  /**
+   * Expose export handler to parent component (for Toolbar)
+   */
+  useEffect(() => {
+    if (onExportHandlerReady) {
+      onExportHandlerReady(handleExportClick);
+    }
+  }, [onExportHandlerReady, handleExportClick]);
 
   /**
    * Handle advanced export start
@@ -244,27 +248,49 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
    * Load video from timeline clip (with trim points)
    */
   const loadTimelineClip = useCallback((timelineClip: TimelineClip, clip: VideoClip) => {
-    console.log('[VideoPlayer] Loading timeline clip:', clip.filename, clip.path);
+    console.log('[VideoPlayer] === LOADING TIMELINE CLIP ===');
+    console.log('[VideoPlayer] Timeline clip:', {
+      id: timelineClip.id,
+      libraryClipId: timelineClip.libraryClipId,
+      trimStart: timelineClip.trimStart,
+      trimEnd: timelineClip.trimEnd,
+    });
+    console.log('[VideoPlayer] Library clip:', {
+      id: clip.id,
+      filename: clip.filename,
+      path: clip.path,
+    });
 
     // Update state first - this will trigger a re-render and create the video element
-    setPlayerState(prev => ({
-      ...prev,
-      currentVideo: clip,
-      currentTimelineClip: timelineClip,
-      isLoading: true,
-      error: null,
-      playbackMode: 'timeline',
-      duration: timelineClip.trimEnd - timelineClip.trimStart,
-    }));
+    setPlayerState(prev => {
+      const newState = {
+        ...prev,
+        currentVideo: clip,
+        currentTimelineClip: timelineClip,
+        isLoading: true,
+        error: null,
+        playbackMode: 'timeline' as const,
+        duration: timelineClip.trimEnd - timelineClip.trimStart,
+      };
+      console.log('[VideoPlayer] Setting player state:', {
+        currentVideo: newState.currentVideo?.filename,
+        currentTimelineClip: newState.currentTimelineClip?.id,
+        playbackMode: newState.playbackMode,
+        duration: newState.duration,
+      });
+      return newState;
+    });
 
     // Stop sequence preview if active
     if (isSequenceModeRef.current) {
+      console.log('[VideoPlayer] Stopping sequence preview');
       onPlayingChange(false);
     }
     
     isSequenceModeRef.current = false;
     setCurrentSequenceIndex(-1);
     setSequenceTime(0);
+    console.log('[VideoPlayer] === END LOADING TIMELINE CLIP ===');
   }, [onPlayingChange]);
 
   /**
@@ -272,30 +298,47 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
    */
   useEffect(() => {
     if (!selectedClipId) {
-      // Clear player
-      setPlayerState(prev => ({
-        ...prev,
-        currentVideo: null,
-        currentTimelineClip: null,
-        duration: 0,
-        currentTime: 0,
-        error: null,
-      }));
+      // Don't clear player state when clip is deselected - keep video loaded
+      // This allows users to still play the video even after clicking elsewhere
+      // Only clear if we're in library mode (library clip was selected)
+      setPlayerState(prev => {
+        // If we have a timeline clip loaded, keep it loaded even after deselection
+        // This allows playback to continue working
+        if (prev.currentTimelineClip) {
+          console.log('[VideoPlayer] Clip deselected, but keeping timeline clip loaded for playback');
+          return prev; // Keep current state
+        }
+        // Only clear if it was a library clip
+        console.log('[VideoPlayer] Clearing library clip after deselection');
+        return {
+          ...prev,
+          currentVideo: null,
+          currentTimelineClip: null,
+          duration: 0,
+          currentTime: 0,
+          error: null,
+        };
+      });
       // Video source is now handled by JSX src attribute
       return;
     }
 
     // Check if it's a timeline clip first
+    console.log('[VideoPlayer] === CLIP SELECTION CHANGED ===');
+    console.log('[VideoPlayer] selectedClipId:', selectedClipId);
+    console.log('[VideoPlayer] timeline clips:', timeline.map(tc => ({ id: tc.id, libraryClipId: tc.libraryClipId })));
     const timelineClip = timeline.find(tc => tc.id === selectedClipId);
     if (timelineClip) {
+      console.log('[VideoPlayer] ✅ Found timeline clip:', timelineClip.id);
       const libraryClip = library.find(lc => lc.id === timelineClip.libraryClipId);
       if (libraryClip) {
+        console.log('[VideoPlayer] ✅ Found matching library clip:', libraryClip.filename);
         loadTimelineClip(timelineClip, libraryClip);
         return;
       } else {
         // Timeline clip found but library clip missing
         console.warn(
-          `[VideoPlayer] Timeline clip found (${selectedClipId}) but library clip not found (libraryClipId: ${timelineClip.libraryClipId})`
+          `[VideoPlayer] ❌ Timeline clip found (${selectedClipId}) but library clip not found (libraryClipId: ${timelineClip.libraryClipId})`
         );
         console.log('[VideoPlayer] Available library clips:', library.map(lc => ({ id: lc.id, filename: lc.filename })));
         console.log('[VideoPlayer] Timeline clips:', timeline.map(tc => ({ id: tc.id, libraryClipId: tc.libraryClipId })));
@@ -325,6 +368,11 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return;
     }
 
+    console.log('[VideoPlayer] === VIDEO SOURCE EFFECT TRIGGERED ===');
+    console.log('[VideoPlayer] currentVideo:', playerState.currentVideo.filename);
+    console.log('[VideoPlayer] currentTimelineClip:', playerState.currentTimelineClip?.id);
+    console.log('[VideoPlayer] isSequenceMode:', isSequenceModeRef.current);
+
     // Use requestAnimationFrame to ensure DOM is updated
     const frameId = requestAnimationFrame(() => {
       // Try to get ref, with retry mechanism
@@ -332,10 +380,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         if (!videoRef.current) {
           if (attempt < 10) {
             // Retry up to 10 times (100ms total)
+            if (attempt === 0) {
+              console.log('[VideoPlayer] Waiting for video element... (attempt', attempt + 1, ')');
+            }
             setTimeout(() => tryLoadVideo(attempt + 1), 10);
             return;
           }
-          console.error('[VideoPlayer] Video ref not available after retries');
+          console.error('[VideoPlayer] ❌ Video ref not available after retries');
           setPlayerState(prev => ({
             ...prev,
             error: 'Failed to initialize video player',
@@ -344,9 +395,12 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           return;
         }
 
+        console.log('[VideoPlayer] ✅ Video element found, loading source...');
         const clip = playerState.currentVideo!;
         const isTimelineClip = playerState.currentTimelineClip !== null;
         const isSequence = isSequenceModeRef.current;
+        
+        console.log('[VideoPlayer] Video loading - isTimelineClip:', isTimelineClip, 'isSequence:', isSequence);
 
         // Don't stop sequence preview if we're loading for sequence mode
         if (isSequence) {
@@ -481,15 +535,25 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           ? `file://${encodedPath}` // Already absolute, just add file://
           : `file:///${encodedPath}`; // Add root slash
         
+        console.log('[VideoPlayer] Video src:', videoSrc);
+        
         // Check if video source is already loaded to avoid unnecessary reloads
         const currentSrc = videoRef.current.src || '';
         const needsReload = !currentSrc.includes(encodeURI(clip.path));
+        console.log('[VideoPlayer] Current src:', currentSrc);
+        console.log('[VideoPlayer] Needs reload:', needsReload);
         
         // Calculate target time for timeline clips
         let targetVideoTime = 0;
         if (isTimelineClip && playerState.currentTimelineClip) {
+          console.log('[VideoPlayer] Calculating target time for timeline clip...');
+          console.log('[VideoPlayer] Timeline clip trim:', {
+            trimStart: playerState.currentTimelineClip.trimStart,
+            trimEnd: playerState.currentTimelineClip.trimEnd,
+          });
           // If we have a sequence time (from clicking on timeline), calculate the correct local time
           if (sequenceTime > 0 && sequence.length > 0 && currentSequenceIndex >= 0) {
+            console.log('[VideoPlayer] Using sequence time:', sequenceTime);
             const currentSequenceItem = sequence[currentSequenceIndex];
             if (currentSequenceItem && currentSequenceItem.clip.id === playerState.currentTimelineClip.id) {
               // This clip matches the sequence item, use sequence time to calculate local time
@@ -498,23 +562,28 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 currentSequenceItem.clip.trimStart,
                 Math.min(targetVideoTime, currentSequenceItem.clip.trimEnd)
               );
+              console.log('[VideoPlayer] Calculated local time from sequence:', targetVideoTime);
             } else {
               // Fallback to trimStart
               targetVideoTime = playerState.currentTimelineClip.trimStart;
+              console.log('[VideoPlayer] Using trimStart (clip mismatch):', targetVideoTime);
             }
           } else {
             // Use trimStart as default
             targetVideoTime = playerState.currentTimelineClip.trimStart;
+            console.log('[VideoPlayer] Using trimStart (default):', targetVideoTime);
           }
         }
         
         if (needsReload) {
-          console.log('[VideoPlayer] Setting video src:', videoSrc, 'at time:', targetVideoTime);
+          console.log('[VideoPlayer] ✅ Setting video src:', videoSrc, 'at time:', targetVideoTime);
+          console.log('[VideoPlayer] Video element readyState:', videoRef.current.readyState);
           // Video source is now set via JSX src attribute, just seek to correct time
           videoRef.current.currentTime = targetVideoTime;
           
           // Mark loading as complete once metadata is loaded
           const handleCanPlayOnce = () => {
+            console.log('[VideoPlayer] ✅ Video canplay event - metadata loaded');
             setPlayerState(prev => ({ ...prev, isLoading: false }));
             videoRef.current?.removeEventListener('canplay', handleCanPlayOnce);
           };
@@ -522,11 +591,13 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
           
           // Also check if already ready
           if (videoRef.current.readyState >= 2) {
+            console.log('[VideoPlayer] ✅ Video already ready (readyState >= 2), marking as loaded');
             setPlayerState(prev => ({ ...prev, isLoading: false }));
           }
         } else {
           // Video already loaded, just update time if needed (e.g., after timeline click seek)
           const currentTime = videoRef.current.currentTime || 0;
+          console.log('[VideoPlayer] Video already loaded. Current time:', currentTime, 'Target time:', targetVideoTime);
           // Only seek if difference is significant (avoid micro-adjustments)
           if (Math.abs(currentTime - targetVideoTime) > 0.1) {
             console.log('[VideoPlayer] Seeking to time:', targetVideoTime);
@@ -537,6 +608,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
             setPlayerState(prev => ({ ...prev, isLoading: false }));
           }
         }
+        
+        console.log('[VideoPlayer] === END VIDEO SOURCE EFFECT ===');
       };
 
       tryLoadVideo();
@@ -840,7 +913,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
       // If this is a restore and we have a playhead position to restore to, seek to it
       // This ensures video seeks to restored position after metadata loads
-      if (wasRestoredRef.current && currentPlayheadPosition > 0) {
+      if (wasRestoredRef.current && currentPlayheadPosition > 0 && videoRef.current) {
         console.log('[VideoPlayer] Metadata loaded during restore, seeking to:', currentPlayheadPosition);
         // Seek will be handled by the useEffect watching currentPlayheadPosition
         // But we can also do it here immediately since metadata is ready
@@ -867,7 +940,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
    * Called when pausing to ensure playhead matches where video actually stopped
    * Uses refs to get latest state values
    */
-  const syncPlayheadOnPause = () => {
+  const syncPlayheadOnPause = useCallback(() => {
     if (!videoRef.current) return;
 
     const videoCurrentTime = videoRef.current.currentTime || 0;
@@ -896,7 +969,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     }
 
     // For library clips, don't update timeline playhead (they're independent)
-  };
+  }, [onPlayheadChange]);
 
   /**
    * Handle video time update (during playback)
@@ -1126,64 +1199,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
   };
 
   /**
-   * Toggle play/pause
-   */
-  const handlePlayPause = () => {
-    if (!videoRef.current) return;
-
-    if (isPlaying) {
-      videoRef.current.pause();
-      // Sync playhead position to match where video actually stopped
-      syncPlayheadOnPause();
-      onPlayingChange(false);
-      setPlayerState(prev => ({ ...prev, isPlaying: false }));
-    } else {
-      videoRef.current.play().catch(err => {
-        // AbortError is expected when video is loading, filter it out
-        if (err.name !== 'AbortError') {
-          console.error('[VideoPlayer] Play error:', err);
-          setPlayerState(prev => ({
-            ...prev,
-            error: 'Failed to play video',
-          }));
-        }
-      });
-      onPlayingChange(true);
-      setPlayerState(prev => ({ ...prev, isPlaying: true }));
-    }
-  };
-
-  /**
-   * Seek to time
-   */
-  const handleSeek = (time: number) => {
-    if (!videoRef.current) return;
-
-    const clampedTime = Math.max(0, Math.min(time, playerState.duration));
-
-    if (playerState.currentTimelineClip) {
-      // For timeline clips, convert to video time
-      const videoTime = playerState.currentTimelineClip.trimStart + clampedTime;
-      const finalTime = Math.max(
-        playerState.currentTimelineClip.trimStart,
-        Math.min(videoTime, playerState.currentTimelineClip.trimEnd)
-      );
-      videoRef.current.currentTime = finalTime;
-      onPlayheadChange(clampedTime);
-    } else {
-      // For library clips, seek directly but DON'T update timeline playhead
-      // Library clips are independent - timeline playhead should not move when seeking library clip
-      videoRef.current.currentTime = clampedTime;
-      // Do NOT call onPlayheadChange for library clips - they're independent
-    }
-
-    setPlayerState(prev => ({
-      ...prev,
-      currentTime: clampedTime,
-    }));
-  };
-
-  /**
    * Start sequence preview
    */
   const handleSequencePreview = useCallback(() => {
@@ -1195,7 +1210,7 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       // Update sequence state for future use
       setSequence(seqToUse);
     }
-    
+
     if (seqToUse.length === 0) {
       console.warn('[VideoPlayer] Cannot preview sequence - timeline is empty or clips missing library references');
       return;
@@ -1203,10 +1218,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
     // Use recalculated sequence
     const finalSequence = seqToUse;
-    
+
     // Start from current playhead position (or beginning if at 0)
     const startSequenceTime = Math.max(0, currentPlayheadPosition);
-    
+
     // Find which clip corresponds to the current playhead position
     let startClipIndex = findCurrentClipInSequence(finalSequence, startSequenceTime);
     if (startClipIndex < 0) {
@@ -1241,6 +1256,296 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
     onPlayingChange(true);
     setPlayerState(prev => ({ ...prev, isPlaying: true }));
   }, [sequence, currentPlayheadPosition, onPlayingChange, library, timeline]);
+
+  /**
+   * Toggle play/pause
+   * Uses same smart logic as Spacebar: starts sequence preview if timeline has clips,
+   * otherwise plays library clip or resumes current playback
+   */
+  const handlePlayPause = useCallback(() => {
+    console.log('[VideoPlayer] === PLAY BUTTON CLICKED ===');
+    console.log('[VideoPlayer] isPlaying:', isPlaying);
+    console.log('[VideoPlayer] playerState:', {
+      currentVideo: playerState.currentVideo?.filename,
+      currentTimelineClip: playerState.currentTimelineClip?.id,
+      playbackMode: playerState.playbackMode,
+      isLoading: playerState.isLoading,
+      duration: playerState.duration,
+      currentTime: playerState.currentTime,
+    });
+    console.log('[VideoPlayer] playerStateRef.current:', {
+      currentVideo: playerStateRef.current.currentVideo?.filename,
+      currentTimelineClip: playerStateRef.current.currentTimelineClip?.id,
+    });
+    console.log('[VideoPlayer] timeline.length:', timeline.length);
+    console.log('[VideoPlayer] isSequenceModeRef.current:', isSequenceModeRef.current);
+    console.log('[VideoPlayer] videoRef.current:', {
+      exists: !!videoRef.current,
+      paused: videoRef.current?.paused,
+      readyState: videoRef.current?.readyState,
+      currentTime: videoRef.current?.currentTime,
+      src: videoRef.current?.src,
+    });
+    console.log('[VideoPlayer] selectedClipId:', selectedClipId);
+
+    if (isPlaying) {
+      // Pause current playback
+      console.log('[VideoPlayer] Currently playing, pausing...');
+      if (!videoRef.current) {
+        console.warn('[VideoPlayer] Cannot pause - videoRef.current is null');
+        return;
+      }
+      videoRef.current.pause();
+      // Sync playhead position to match where video actually stopped
+      syncPlayheadOnPause();
+      onPlayingChange(false);
+      setPlayerState(prev => ({ ...prev, isPlaying: false }));
+      return;
+    }
+
+    // When playing, use same context-aware logic as Spacebar
+    // Use current state (not ref) to ensure we have the latest values after clip selection
+    const currentPlayerState = playerState;
+    const currentPlayerStateRef = playerStateRef.current;
+    
+    // Check if we're in library mode (library clip selected, not timeline clip)
+    // Use both state and ref to catch all cases
+    const hasTimelineClip = currentPlayerState.currentTimelineClip || currentPlayerStateRef.currentTimelineClip;
+    const isLibraryMode = currentPlayerState.currentVideo && 
+                          !hasTimelineClip && 
+                          !isSequenceModeRef.current;
+    console.log('[VideoPlayer] isLibraryMode:', isLibraryMode);
+    console.log('[VideoPlayer] State check - currentPlayerState.currentTimelineClip:', !!currentPlayerState.currentTimelineClip, 'currentPlayerStateRef.currentTimelineClip:', !!currentPlayerStateRef.currentTimelineClip);
+    
+    // PRIORITY 0: If a timeline clip is currently loaded (user clicked on timeline clip), start sequence preview
+    console.log('[VideoPlayer] PRIORITY 0 check: hasTimelineClip:', !!hasTimelineClip, 'timeline.length:', timeline.length, 'isSequenceMode:', isSequenceModeRef.current);
+    if (hasTimelineClip && timeline.length > 0 && !isSequenceModeRef.current) {
+      // Always recalculate sequence to ensure we have latest data
+      console.log('[VideoPlayer] PRIORITY 0: Calculating sequence from timeline...');
+      let seqToUse = calculateSequence(timeline, library);
+      console.log('[VideoPlayer] PRIORITY 0: Calculated sequence length:', seqToUse.length);
+      console.log('[VideoPlayer] PRIORITY 0: Library clips available:', library.length);
+      console.log('[VideoPlayer] PRIORITY 0: Timeline clips:', timeline.map(tc => ({ id: tc.id, libraryClipId: tc.libraryClipId })));
+      
+      if (seqToUse.length > 0) {
+        console.log('[VideoPlayer] ✅ PRIORITY 0: Starting sequence preview via play button (timeline clip loaded)');
+        // Update sequence state before calling handleSequencePreview
+        setSequence(seqToUse);
+        handleSequencePreview();
+        return;
+      } else {
+        console.log('[VideoPlayer] ❌ PRIORITY 0: Sequence calculation returned empty array');
+        console.log('[VideoPlayer] PRIORITY 0: Library clips:', library.map(lc => ({ id: lc.id, filename: lc.filename })));
+        console.log('[VideoPlayer] PRIORITY 0: Timeline clips:', timeline.map(tc => ({ id: tc.id, libraryClipId: tc.libraryClipId })));
+        // Check if library clip IDs match
+        timeline.forEach(tc => {
+          const libClip = library.find(lc => lc.id === tc.libraryClipId);
+          if (!libClip) {
+            console.warn('[VideoPlayer] PRIORITY 0: Timeline clip missing library clip:', tc.id, 'libraryClipId:', tc.libraryClipId);
+          }
+        });
+      }
+    }
+    
+    // PRIORITY 1: If we have timeline clips but sequence mode is not active, start sequence preview
+    // This is a fallback if PRIORITY 0 didn't catch it (e.g., timeline clip loaded but ref wasn't updated)
+    console.log('[VideoPlayer] PRIORITY 1 check: timeline.length:', timeline.length, 'isSequenceMode:', isSequenceModeRef.current, 'isLibraryMode:', isLibraryMode);
+    if (timeline.length > 0 && !isSequenceModeRef.current && !isLibraryMode) {
+      // Always recalculate sequence to ensure we have latest data
+      console.log('[VideoPlayer] PRIORITY 1: Calculating sequence from timeline...');
+      let seqToUse = calculateSequence(timeline, library);
+      
+      console.log('[VideoPlayer] PRIORITY 1: Calculated sequence length:', seqToUse.length);
+      if (seqToUse.length > 0) {
+        console.log('[VideoPlayer] ✅ PRIORITY 1: Starting sequence preview via play button (timeline has clips)');
+        // Update sequence state before calling handleSequencePreview
+        setSequence(seqToUse);
+        handleSequencePreview();
+        return;
+      } else {
+        console.log('[VideoPlayer] ❌ PRIORITY 1: Sequence calculation returned empty array');
+        console.log('[VideoPlayer] Debug - library clips:', library.map(lc => ({ id: lc.id, filename: lc.filename })));
+        console.log('[VideoPlayer] Debug - timeline clips:', timeline.map(tc => ({ id: tc.id, libraryClipId: tc.libraryClipId })));
+      }
+    }
+    
+    // PRIORITY 2: If we're in library mode, just play the library clip
+    console.log('[VideoPlayer] PRIORITY 2 check: isLibraryMode:', isLibraryMode);
+    if (isLibraryMode) {
+      if (!videoRef.current) {
+        console.warn('[VideoPlayer] ❌ PRIORITY 2: Cannot play library clip - videoRef.current is null');
+        return;
+      }
+      console.log('[VideoPlayer] ✅ PRIORITY 2: Playing library clip via play button');
+      videoRef.current.currentTime = 0;
+      videoRef.current.play().catch(err => {
+        if (err.name !== 'AbortError') {
+          console.error('[VideoPlayer] Play error:', err);
+        }
+      });
+      onPlayingChange(true);
+      setPlayerState(prev => ({ ...prev, isPlaying: true, currentTime: 0 }));
+      return;
+    }
+    
+    // PRIORITY 3: If sequence mode is active but paused, resume from current playhead
+    console.log('[VideoPlayer] PRIORITY 3 check: isSequenceMode:', isSequenceModeRef.current, 'sequence.length:', sequenceRef.current.length);
+    if (isSequenceModeRef.current && sequenceRef.current.length > 0) {
+      if (!videoRef.current) {
+        console.warn('[VideoPlayer] ❌ PRIORITY 3: Cannot resume sequence - videoRef.current is null');
+        return;
+      }
+      const playheadPos = currentPlayheadPositionRef.current;
+      const currentSequence = sequenceRef.current;
+      const clipIndex = findCurrentClipInSequence(currentSequence, playheadPos);
+      console.log('[VideoPlayer] PRIORITY 3: playheadPos:', playheadPos, 'clipIndex:', clipIndex);
+      if (clipIndex >= 0 && clipIndex < currentSequence.length) {
+        console.log('[VideoPlayer] ✅ PRIORITY 3: Resuming sequence from clip index', clipIndex);
+        const targetItem = currentSequence[clipIndex];
+        const localTime = getLocalTimeInClip(targetItem, playheadPos);
+        const clampedLocalTime = Math.max(
+          targetItem.clip.trimStart,
+          Math.min(localTime, targetItem.clip.trimEnd)
+        );
+        
+        // Switch to correct clip if needed
+        if (clipIndex !== currentSequenceIndexRef.current) {
+          console.log('[VideoPlayer] Switching to clip', clipIndex, 'from', currentSequenceIndexRef.current);
+          setCurrentSequenceIndex(clipIndex);
+          setSequenceTime(playheadPos);
+          setPlayerState(prev => ({
+            ...prev,
+            currentVideo: targetItem.libraryClip,
+            currentTimelineClip: targetItem.clip,
+            isLoading: true,
+          }));
+        }
+        
+        // Seek to correct position and resume playback
+        videoRef.current.currentTime = clampedLocalTime;
+        setSequenceTime(playheadPos);
+        onPlayheadChange(playheadPos);
+        videoRef.current.play().catch(err => {
+          if (err.name !== 'AbortError') {
+            console.error('[VideoPlayer] Resume play error:', err);
+          }
+        });
+        onPlayingChange(true);
+        setPlayerState(prev => ({ ...prev, isPlaying: true }));
+        return;
+      } else {
+        console.log('[VideoPlayer] ❌ PRIORITY 3: clipIndex out of bounds or invalid:', clipIndex);
+      }
+    }
+    
+    // PRIORITY 4: Fallback - play whatever video is loaded (including timeline clips)
+    console.log('[VideoPlayer] PRIORITY 4: Fallback - trying to play loaded video');
+    if (!videoRef.current) {
+      console.warn('[VideoPlayer] ❌ PRIORITY 4: Cannot play - videoRef.current is null');
+      return;
+    }
+    if (!currentPlayerState.currentVideo) {
+      console.warn('[VideoPlayer] ❌ PRIORITY 4: No video loaded, cannot play');
+      console.log('[VideoPlayer] Current player state:', currentPlayerState);
+      return;
+    }
+    
+    // If we have a timeline clip loaded but not in sequence mode, we should still be able to play it
+    // Check if video element is ready
+    if (videoRef.current.readyState < 2) {
+      console.warn('[VideoPlayer] ❌ PRIORITY 4: Video not ready (readyState:', videoRef.current.readyState, ')');
+      // Wait for video to be ready
+      const handleCanPlay = () => {
+        console.log('[VideoPlayer] ✅ PRIORITY 4: Video ready, playing now');
+        if (!videoRef.current) return;
+        videoRef.current.play().catch(err => {
+          if (err.name !== 'AbortError') {
+            console.error('[VideoPlayer] Play error:', err);
+            setPlayerState(prev => ({
+              ...prev,
+              error: 'Failed to play video',
+            }));
+          }
+        });
+        onPlayingChange(true);
+        setPlayerState(prev => ({ ...prev, isPlaying: true }));
+        videoRef.current.removeEventListener('canplay', handleCanPlay);
+      };
+      videoRef.current.addEventListener('canplay', handleCanPlay);
+      return;
+    }
+    
+    console.log('[VideoPlayer] ✅ PRIORITY 4: Playing loaded video');
+    console.log('[VideoPlayer] Video element readyState:', videoRef.current.readyState, 'paused:', videoRef.current.paused);
+    console.log('[VideoPlayer] Video currentTime:', videoRef.current.currentTime);
+    
+    // For timeline clips, ensure we're at the correct start time
+    if (currentPlayerState.currentTimelineClip) {
+      const trimStart = currentPlayerState.currentTimelineClip.trimStart;
+      const currentTime = videoRef.current.currentTime;
+      if (Math.abs(currentTime - trimStart) > 0.1) {
+        console.log('[VideoPlayer] Seeking timeline clip to trimStart:', trimStart);
+        videoRef.current.currentTime = trimStart;
+      }
+    }
+    
+    videoRef.current.play().catch(err => {
+      if (err.name !== 'AbortError') {
+        console.error('[VideoPlayer] Play error:', err);
+        console.error('[VideoPlayer] Error details:', {
+          name: err.name,
+          message: err.message,
+          code: err.code,
+        });
+        setPlayerState(prev => ({
+          ...prev,
+          error: 'Failed to play video',
+        }));
+      }
+    });
+    onPlayingChange(true);
+    setPlayerState(prev => ({ ...prev, isPlaying: true }));
+    console.log('[VideoPlayer] === END PLAY BUTTON HANDLER ===');
+  }, [isPlaying, playerState, timeline, library, sequence, selectedClipId, currentPlayheadPosition, onPlayingChange, handleSequencePreview, syncPlayheadOnPause, onPlayheadChange]);
+
+  /**
+   * Expose play/pause handler to parent component (for Toolbar)
+   */
+  useEffect(() => {
+    if (onPlayPauseHandlerReady) {
+      onPlayPauseHandlerReady(handlePlayPause);
+    }
+  }, [onPlayPauseHandlerReady, handlePlayPause]);
+
+  /**
+   * Seek to time
+   */
+  const handleSeek = (time: number) => {
+    if (!videoRef.current) return;
+
+    const clampedTime = Math.max(0, Math.min(time, playerState.duration));
+
+    if (playerState.currentTimelineClip) {
+      // For timeline clips, convert to video time
+      const videoTime = playerState.currentTimelineClip.trimStart + clampedTime;
+      const finalTime = Math.max(
+        playerState.currentTimelineClip.trimStart,
+        Math.min(videoTime, playerState.currentTimelineClip.trimEnd)
+      );
+      videoRef.current.currentTime = finalTime;
+      onPlayheadChange(clampedTime);
+    } else {
+      // For library clips, seek directly but DON'T update timeline playhead
+      // Library clips are independent - timeline playhead should not move when seeking library clip
+      videoRef.current.currentTime = clampedTime;
+      // Do NOT call onPlayheadChange for library clips - they're independent
+    }
+
+    setPlayerState(prev => ({
+      ...prev,
+      currentTime: clampedTime,
+    }));
+  };
 
   /**
    * Keyboard shortcuts (Spacebar for play/pause, Cmd+E for export)
@@ -1570,28 +1875,6 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
 
   return (
     <div className="flex-1 bg-[#1a1a1a] p-4 flex flex-col overflow-hidden gap-4 min-w-0 relative max-h-full">
-      {/* Toolbar: Sequence Preview, Record Screen, and Export Buttons */}
-      <div className="flex-shrink-0 flex justify-end">
-        <SequencePreviewButton
-          isEmpty={timeline.length === 0}
-          onClick={handleSequencePreview}
-        />
-        {onRecordClick && (
-          <RecordButton
-            onClick={onRecordClick}
-            disabled={isRecording || isProcessingRecording}
-          />
-        )}
-        <button
-          className="bg-[#0066cc] text-white border-none rounded-md px-4 py-2 text-sm font-medium cursor-pointer transition-colors hover:bg-[#0052a3] disabled:bg-[#333333] disabled:text-[#666666] disabled:cursor-not-allowed ml-2"
-          onClick={handleExportClick}
-          disabled={timeline.length === 0 || exportHook.isExporting}
-          aria-label="Export video"
-        >
-          {exportHook.isExporting ? 'Exporting...' : 'Export'}
-        </button>
-      </div>
-
       {/* Export Progress Bar */}
       <ExportProgressBar
         progress={exportHook.progress}
@@ -1599,9 +1882,20 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         error={exportHook.error}
       />
 
-      {/* Video container with constrained height */}
-      <div className="flex-shrink-0 relative flex items-center justify-center bg-black rounded-lg overflow-hidden max-h-[60vh]">
-        <div className="w-full h-0 pb-[56.25%] relative"> {/* 16:9 aspect ratio container */}
+      {/* Video container - Landscape YouTube-style */}
+      <div className="flex-1 relative bg-black rounded-lg min-h-0 flex items-center justify-center overflow-hidden">
+        <div 
+          className="aspect-video relative"
+          style={{ 
+            // Ensure container fits within available height
+            // When height is constrained, calculate width from height (height-constrained)
+            // When width is constrained, calculate height from width (width-constrained)
+            // aspect-ratio will calculate one dimension from the other
+            height: '100%',
+            maxHeight: '100%',
+            maxWidth: '100%',
+          }}
+        > {/* 16:9 aspect ratio container - constrained to fit within available height */}
           {playerState.error ? (
             <div className="absolute inset-0 flex items-center justify-center p-6 text-[#cc0000]">
               <p className="text-sm font-medium">{playerState.error}</p>
@@ -1630,6 +1924,8 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
                 onLoadStart={handleLoadStart}
                 style={{
                   opacity: playerState.isLoading ? 0 : 1,
+                  maxHeight: '100%',
+                  maxWidth: '100%',
                 }}
               />
               {/* Show loading overlay when loading */}
@@ -1649,7 +1945,10 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
         isPlaying={isPlaying}
         currentTime={playerState.currentTime}
         duration={playerState.duration}
-        onPlayPause={handlePlayPause}
+        onPlayPause={() => {
+          console.log('[VideoPlayer] PlayerControls onPlayPause called');
+          handlePlayPause();
+        }}
         onSeek={handleSeek}
         disabled={!playerState.currentVideo}
       />

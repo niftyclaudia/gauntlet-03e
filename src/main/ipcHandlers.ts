@@ -16,6 +16,7 @@ import {
   getAutosaveFileAge
 } from './fileSystem';
 import { VideoMetadata, SavedProjectState, TimelineClip, VideoClip, AdvancedExportSettings } from '../types/video';
+import { TimelineDoc } from '../types/timeline';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -389,7 +390,7 @@ export function registerIpcHandlers(): void {
   /**
    * Handler: export:start
    * Initiates video export process
-   * Params: clips (TimelineClip[]), libraryClips (VideoClip[]), outputPath (string), advancedSettings (AdvancedExportSettings?)
+   * Params: clips (TimelineClip[]), libraryClips (VideoClip[]), outputPath (string), projectState (SavedProjectState?), advancedSettings (AdvancedExportSettings?), timelineDoc (TimelineDoc?)
    * Returns: Promise<void>
    * Progress: Emits 'export:progress' events via IPC (0-100)
    */
@@ -399,12 +400,41 @@ export function registerIpcHandlers(): void {
     libraryClips: VideoClip[],
     outputPath: string,
     projectState?: SavedProjectState,
-    advancedSettings?: AdvancedExportSettings
+    advancedSettings?: AdvancedExportSettings,
+    timelineDoc?: TimelineDoc
   ): Promise<void> => {
     try {
-      // Validate inputs
-      if (!clips || clips.length === 0) {
-        throw new Error('Cannot export: timeline is empty');
+      console.log('[IPC] export:start handler called with:', {
+        clipsCount: clips?.length || 0,
+        libraryClipsCount: libraryClips?.length || 0,
+        outputPath,
+        hasProjectState: !!projectState,
+        hasAdvancedSettings: !!advancedSettings,
+        hasTimelineDoc: !!timelineDoc,
+        timelineDocTracks: timelineDoc?.tracks?.length || 0
+      });
+      
+      // Validate inputs - support both legacy clips array and new timelineDoc
+      if (timelineDoc) {
+        console.log('[IPC] Using multitrack export, timelineDoc details:', {
+          totalTracks: timelineDoc.tracks.length,
+          trackRoles: timelineDoc.tracks.map(t => ({
+            id: t.id,
+            role: t.role,
+            clips: t.lanes?.[0]?.clips?.length || 0
+          }))
+        });
+        // Multitrack export - validate timelineDoc
+        const mainTrack = timelineDoc.tracks.find(t => t.role === 'main');
+        if (!mainTrack || mainTrack.lanes[0]?.clips.length === 0) {
+          throw new Error('Cannot export: main track is empty');
+        }
+      } else {
+        console.log('[IPC] Using legacy single-track export');
+        // Legacy single-track export
+        if (!clips || clips.length === 0) {
+          throw new Error('Cannot export: timeline is empty');
+        }
       }
       if (!libraryClips || libraryClips.length === 0) {
         throw new Error('Cannot export: no library clips provided');
@@ -442,8 +472,11 @@ export function registerIpcHandlers(): void {
         };
         console.log('[IPC] Using advanced export settings:', settings);
       } else {
-        // Use default calculation
-        settings = calculateExportSettings(clips, libraryClips);
+        // Use default calculation - extract clips from timelineDoc if needed
+        const clipsToUse = timelineDoc 
+          ? timelineDoc.tracks.find(t => t.role === 'main')?.lanes[0]?.clips || []
+          : clips || [];
+        settings = calculateExportSettings(clipsToUse, libraryClips);
         console.log('[IPC] Using default export settings:', settings);
       }
 
@@ -454,12 +487,20 @@ export function registerIpcHandlers(): void {
       }
 
       // Export with progress tracking
+      console.log('[IPC] Starting export with:', {
+        hasTimelineDoc: !!timelineDoc,
+        timelineDocTracks: timelineDoc?.tracks.length || 0,
+        clipsCount: clips?.length || 0,
+        libraryClipsCount: libraryClips.length
+      });
+      
       await exportVideoSequence(
         {
-          clips,
+          clips: timelineDoc ? undefined : clips, // Only pass clips if not using timelineDoc
           libraryClips,
           outputPath,
           settings,
+          timelineDoc, // Pass timelineDoc for multitrack export
         },
         (progress) => {
           // Emit progress event to renderer
