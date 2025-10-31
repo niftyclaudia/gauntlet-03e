@@ -532,6 +532,19 @@ const Timeline: React.FC<TimelineProps> = ({
 
       const clipStartX = calculateClipPosition(clipIndex, sortedTimeline, library, timelineZoom);
       const clipRelativeMouseX = absoluteMouseX - clipStartX;
+      
+      // Calculate timeline start time for this clip (for snap indicator positioning)
+      let timelineStartTime = clip.start ?? 0;
+      if (clip.start === undefined) {
+        // Fallback: calculate cumulative time
+        for (let i = 0; i < clipIndex; i++) {
+          const prevClip = sortedTimeline[i];
+          const prevLibraryClip = library.find(lc => lc.id === prevClip.libraryClipId);
+          if (prevLibraryClip) {
+            timelineStartTime += prevClip.trimEnd - prevClip.trimStart;
+          }
+        }
+      }
 
       // Update trim drag position with automatic smart snapping
       trimDrag.handleTrimMove(
@@ -550,7 +563,16 @@ const Timeline: React.FC<TimelineProps> = ({
         const snapTime = trimDrag.dragging?.edge === 'left' 
           ? (trimDrag.draggedInPoint ?? clip.trimStart)
           : (trimDrag.draggedOutPoint ?? clip.trimEnd);
-        const snapPosition = clipStartX + (snapTime * timelineZoom * 10);
+        
+        // Convert source time to timeline position
+        // snapTime is source time, we need timeline position
+        // Timeline position = clip.start + (snapTime - clip.trimStart) 
+        // Then convert to pixels
+        const clipTimelineStart = clip.start ?? timelineStartTime;
+        const offsetInClip = snapTime - clip.trimStart;
+        const timelinePosition = clipTimelineStart + offsetInClip;
+        const snapPosition = timelinePosition * timelineZoom * 10;
+        
         setSnapIndicatorPosition(snapPosition);
       } else {
         setSnapIndicatorPosition(null);

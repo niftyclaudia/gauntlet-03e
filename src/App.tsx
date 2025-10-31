@@ -30,6 +30,15 @@ import {
   migrateToMagneticTimeline,
   validateGaplessInvariant,
 } from './utils/magneticTimelineOperations';
+import { TimelineDoc, createEmptyTimelineDoc } from './types/timeline';
+import { migrateToMultitrack, extractMainTrackClips, needsMultitrackMigration } from './utils/multitrackMigration';
+import {
+  addClipToMainTrackMagnetic,
+  removeClipFromMainTrackMagnetic,
+  reorderClipInMainTrackMagnetic,
+  trimClipInMainTrackMagnetic,
+  splitClipInMainTrackMagnetic,
+} from './utils/multitrackMagneticOperations';
 import { useAutoSave } from './hooks/useAutoSave';
 import { useSessionRestore } from './hooks/useSessionRestore';
 import { useFileImport } from './hooks/useFileImport';
@@ -54,12 +63,46 @@ const App: React.FC = () => {
 
   // Timeline state
   const [timeline, setTimeline] = useState<TimelineClip[]>([]);
+  const [timelineDoc, setTimelineDoc] = useState<TimelineDoc | undefined>(undefined);
   const [timelineZoom, setTimelineZoom] = useState<number>(1.0);
   const [timelineScrollPosition, setTimelineScrollPosition] = useState<number>(0);
   const [currentPlayheadPosition, setCurrentPlayheadPosition] = useState<number>(0);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isExporting] = useState<boolean>(false);
   const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  
+  // Initialize timelineDoc from timeline on mount (one-time migration)
+  useEffect(() => {
+    if (timeline.length > 0 && !timelineDoc) {
+      const doc = migrateToMultitrack(timeline);
+      setTimelineDoc(doc);
+    } else if (timeline.length === 0 && timelineDoc && extractMainTrackClips(timelineDoc).length > 0) {
+      // Clear timelineDoc if timeline becomes empty
+      setTimelineDoc(createEmptyTimelineDoc());
+    }
+  }, []); // Only run on mount
+  
+  // Sync timeline array from timelineDoc main track (for backward compatibility)
+  useEffect(() => {
+    if (timelineDoc) {
+      const mainTrackClips = extractMainTrackClips(timelineDoc);
+      // Only update if arrays have different lengths or clip IDs (avoid unnecessary updates)
+      const clipsChanged = 
+        mainTrackClips.length !== timeline.length ||
+        mainTrackClips.some((clip, i) => timeline[i]?.id !== clip.id) ||
+        mainTrackClips.some((clip, i) => {
+          const oldClip = timeline[i];
+          return !oldClip || 
+            oldClip.trimStart !== clip.trimStart || 
+            oldClip.trimEnd !== clip.trimEnd ||
+            oldClip.start !== clip.start;
+        });
+      
+      if (clipsChanged) {
+        setTimeline(mainTrackClips);
+      }
+    }
+  }, [timelineDoc]); // Update when timelineDoc changes
   
   // Refs for click-outside detection
   const timelineRef = useRef<HTMLDivElement>(null);
@@ -112,19 +155,18 @@ const App: React.FC = () => {
    * Handle adding clip from Library to Timeline (with ripple insert)
    */
   const handleAddClipToTimeline = (libraryClipId: string, insertionIndex?: number) => {
-    setTimeline(prev => {
-      const migrated = migrateToMagneticTimeline(prev);
-      const newTimeline = addClipToTimelineMagnetic(libraryClipId, migrated, library, insertionIndex, 'ripple');
+    setTimelineDoc(prevDoc => {
+      const updatedDoc = addClipToMainTrackMagnetic(
+        libraryClipId,
+        prevDoc,
+        timeline,
+        library,
+        insertionIndex,
+        'ripple'
+      );
       
-      // Validate invariant in development
-      if (process.env.NODE_ENV === 'development') {
-        if (!validateGaplessInvariant(newTimeline)) {
-          console.error('[App] Gapless invariant violated after addClip');
-        }
-      }
-      
-      console.log(`[App] Added clip ${libraryClipId} to timeline at index ${insertionIndex ?? prev.length}. Timeline now has ${newTimeline.length} clip(s).`);
-      return newTimeline;
+      console.log(`[App] Added clip ${libraryClipId} to main track at index ${insertionIndex ?? timeline.length}`);
+      return updatedDoc;
     });
   };
 
@@ -132,19 +174,10 @@ const App: React.FC = () => {
    * Handle reordering clip on timeline (with ripple move)
    */
   const handleReorderClip = (dragIndex: number, hoverIndex: number) => {
-    setTimeline(prev => {
-      const migrated = migrateToMagneticTimeline(prev);
-      const newTimeline = reorderTimelineClipMagnetic(dragIndex, hoverIndex, migrated);
-      
-      // Validate invariant in development
-      if (process.env.NODE_ENV === 'development') {
-        if (!validateGaplessInvariant(newTimeline)) {
-          console.error('[App] Gapless invariant violated after reorder');
-        }
-      }
-      
+    setTimelineDoc(prevDoc => {
+      const updatedDoc = reorderClipInMainTrackMagnetic(dragIndex, hoverIndex, prevDoc, timeline);
       console.log(`[App] Reordered clip from index ${dragIndex} to ${hoverIndex}`);
-      return newTimeline;
+      return updatedDoc;
     });
   };
 
@@ -165,23 +198,15 @@ const App: React.FC = () => {
    * Handle deleting clip from timeline (with ripple delete)
    */
   const handleDeleteClip = (clipId: string) => {
-    setTimeline(prev => {
-      const migrated = migrateToMagneticTimeline(prev);
-      const newTimeline = removeClipFromTimelineMagnetic(clipId, migrated);
-      
-      // Validate invariant in development
-      if (process.env.NODE_ENV === 'development') {
-        if (!validateGaplessInvariant(newTimeline)) {
-          console.error('[App] Gapless invariant violated after delete');
-        }
-      }
+    setTimelineDoc(prevDoc => {
+      const updatedDoc = removeClipFromMainTrackMagnetic(clipId, prevDoc, timeline);
       
       // Clear selection if deleted clip was selected
       if (selectedClipId === clipId) {
         setSelectedClipId(null);
       }
-      console.log(`[App] Deleted clip ${clipId} from timeline. Timeline now has ${newTimeline.length} clip(s).`);
-      return newTimeline;
+      console.log(`[App] Deleted clip ${clipId} from timeline`);
+      return updatedDoc;
     });
   };
 
@@ -197,13 +222,12 @@ const App: React.FC = () => {
     });
 
     // Also remove from timeline if it's being used there
-    setTimeline(prev => {
-      const migrated = migrateToMagneticTimeline(prev);
-      const newTimeline = removeClipFromTimelineMagnetic(clipId, migrated);
-      if (newTimeline.length !== prev.length) {
-        console.log(`[App] Also removed clip ${clipId} from timeline. Timeline now has ${newTimeline.length} clip(s).`);
+    setTimelineDoc(prevDoc => {
+      const updatedDoc = removeClipFromMainTrackMagnetic(clipId, prevDoc, timeline);
+      if (updatedDoc !== prevDoc) {
+        console.log(`[App] Also removed clip ${clipId} from timeline`);
       }
-      return newTimeline;
+      return updatedDoc;
     });
 
     // Clear selection if deleted clip was selected
@@ -226,19 +250,29 @@ const App: React.FC = () => {
    * Handle trim update with ripple behavior
    */
   const handleTrimUpdate = (clipId: string, trimStart: number, trimEnd: number) => {
-    setTimeline(prev => {
-      const migrated = migrateToMagneticTimeline(prev);
-      const newTimeline = trimClipMagnetic(clipId, trimStart, trimEnd, migrated, library, 'ripple');
-      
-      // Validate invariant in development
-      if (process.env.NODE_ENV === 'development') {
-        if (!validateGaplessInvariant(newTimeline)) {
-          console.error('[App] Gapless invariant violated after trim');
-        }
+    setTimelineDoc(prevDoc => {
+      if (!prevDoc || prevDoc.tracks.length === 0) {
+        // Fallback to timeline array if timelineDoc not initialized
+        console.warn('[App] TimelineDoc not initialized, using timeline array for trim');
+        const migrated = migrateToMultitrack(timeline);
+        setTimelineDoc(migrated);
+        // Retry with migrated doc
+        return trimClipInMainTrackMagnetic(clipId, trimStart, trimEnd, migrated, timeline, library, 'ripple');
       }
       
+      // Get current clips from main track - these are the source of truth
+      const currentClips = extractMainTrackClips(prevDoc);
+      const updatedDoc = trimClipInMainTrackMagnetic(
+        clipId,
+        trimStart,
+        trimEnd,
+        prevDoc,
+        currentClips,
+        library,
+        'ripple'
+      );
       console.log(`[App] Updated trim for clip ${clipId}: trimStart=${trimStart.toFixed(2)}s, trimEnd=${trimEnd.toFixed(2)}s`);
-      return newTimeline;
+      return updatedDoc;
     });
   };
 
@@ -252,21 +286,20 @@ const App: React.FC = () => {
       return;
     }
 
-    setTimeline(prev => {
-      const migrated = migrateToMagneticTimeline(prev);
-      const newTimeline = splitClipAtPlayheadMagnetic(clipToSplit.id, currentPlayheadPosition, migrated, library);
+    setTimelineDoc(prevDoc => {
+      const updatedDoc = splitClipInMainTrackMagnetic(
+        clipToSplit.id,
+        currentPlayheadPosition,
+        prevDoc,
+        timeline,
+        library
+      );
       
-      // Validate invariant in development
-      if (process.env.NODE_ENV === 'development') {
-        if (!validateGaplessInvariant(newTimeline)) {
-          console.error('[App] Gapless invariant violated after split');
-        }
+      const mainTrackClips = extractMainTrackClips(updatedDoc);
+      if (mainTrackClips.length > timeline.length) {
+        console.log(`[App] Split clip ${clipToSplit.id} at ${currentPlayheadPosition.toFixed(2)}s`);
       }
-      
-      if (newTimeline.length > prev.length) {
-        console.log(`[App] Split clip ${clipToSplit.id} at ${currentPlayheadPosition.toFixed(2)}s. Timeline now has ${newTimeline.length} clip(s).`);
-      }
-      return newTimeline;
+      return updatedDoc;
     });
   };
 

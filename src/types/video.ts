@@ -57,10 +57,14 @@ export interface TimelineClip {
   trimStart: number;
   /** Trim end time in seconds (default: clip duration) */
   trimEnd: number;
-  /** Sequence position (0, 1, 2, ...) */
+  /** Sequence position (0, 1, 2, ...) - for main track ordering */
   order: number;
   /** Absolute start time in timeline (seconds) - required for magnetic timeline, optional for backward compatibility */
   start?: number;
+  /** Track ID this clip belongs to (for multitrack) */
+  trackId?: string;
+  /** Lane ID within track (for multitrack) */
+  laneId?: string;
 }
 
 /**
@@ -69,8 +73,10 @@ export interface TimelineClip {
 export interface AppState {
   /** Array of imported video clips */
   library: VideoClip[];
-  /** Timeline clips */
+  /** Timeline clips (legacy - kept for backward compatibility) */
   timeline: TimelineClip[];
+  /** Timeline document (multitrack structure - new) */
+  timelineDoc?: import('./timeline').TimelineDoc;
   /** Currently selected clip ID */
   selectedClipId: string | null;
   /** Current playhead position in seconds */

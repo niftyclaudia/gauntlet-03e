@@ -285,24 +285,34 @@ const VideoPlayer: React.FC<VideoPlayerProps> = ({
       return;
     }
 
-    // Check if it's a timeline clip
+    // Check if it's a timeline clip first
     const timelineClip = timeline.find(tc => tc.id === selectedClipId);
     if (timelineClip) {
       const libraryClip = library.find(lc => lc.id === timelineClip.libraryClipId);
       if (libraryClip) {
         loadTimelineClip(timelineClip, libraryClip);
         return;
+      } else {
+        // Timeline clip found but library clip missing
+        console.warn(
+          `[VideoPlayer] Timeline clip found (${selectedClipId}) but library clip not found (libraryClipId: ${timelineClip.libraryClipId})`
+        );
+        console.log('[VideoPlayer] Available library clips:', library.map(lc => ({ id: lc.id, filename: lc.filename })));
+        console.log('[VideoPlayer] Timeline clips:', timeline.map(tc => ({ id: tc.id, libraryClipId: tc.libraryClipId })));
+        return; // Don't try to load as library clip
       }
     }
 
-    // Otherwise, it's a library clip
+    // Otherwise, check if it's a library clip
     const libraryClip = library.find(lc => lc.id === selectedClipId);
     if (libraryClip) {
       console.log('[VideoPlayer] Found library clip:', libraryClip.filename, libraryClip.id);
       loadLibraryClip(libraryClip);
     } else {
-      console.warn('[VideoPlayer] Library clip not found for ID:', selectedClipId);
+      // Not found in timeline or library
+      console.warn(`[VideoPlayer] Clip not found for ID: ${selectedClipId} (checked both timeline and library)`);
       console.log('[VideoPlayer] Available library clips:', library.map(lc => ({ id: lc.id, filename: lc.filename })));
+      console.log('[VideoPlayer] Timeline clips:', timeline.map(tc => ({ id: tc.id, libraryClipId: tc.libraryClipId })));
     }
   }, [selectedClipId, library, timeline, loadLibraryClip, loadTimelineClip]);
 
